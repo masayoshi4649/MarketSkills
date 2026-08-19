@@ -1,0 +1,7 @@
+interface:
+  display_name: "日本の市場拡大・中長期成長株"
+  short_description: "市場拡大と企業の取り分を検証し、日本株を採点・出口設計"
+  default_prompt: "$pnd-rank-japan-growth-markets を使い、市場拡大が見込まれる日本株を根拠付きで採点し、入口と中長期の出口戦略を示してください。"
+
+policy:
+  allow_implicit_invocation: true

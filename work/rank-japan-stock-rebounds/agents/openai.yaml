@@ -1,0 +1,13 @@
+interface:
+  display_name: 日本株 復活候補ランキング
+  short_description: 日本株の急落要因と改善確度から短中期の復活候補を順位付け
+  default_prompt: $rank-japan-stock-rebounds を使い、今日の下落率ランキングから短中期の復活候補を分析して。
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

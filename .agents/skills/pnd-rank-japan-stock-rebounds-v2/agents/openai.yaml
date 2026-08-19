@@ -1,0 +1,6 @@
+interface:
+  display_name: "日本株 復活候補ランキング"
+  short_description: "早期選別で急落株を絞り、短期・中期格付けと出口戦略を提示"
+  default_prompt: "$pnd-rank-japan-stock-rebounds-v2 を使い、現在の下落率ランキグを早期選別し、復活候補の短期・中期格付けと出口戦略を示して。"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  display_name: "日本個別株シナリオ予測"
+  short_description: "指定した日本株の現在値基準シナリオと出口戦略を作成"
+  default_prompt: "$pnd-forecast-japan-stock を使い、指定した日本株の今後の株価を分析して。"
+policy:
+  allow_implicit_invocation: true

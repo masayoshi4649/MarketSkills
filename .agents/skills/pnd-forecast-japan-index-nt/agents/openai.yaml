@@ -1,0 +1,6 @@
+interface:
+  display_name: "日本株指数・NT予測"
+  short_description: "現在板基準で有効期限付きの日経225・TOPIX・NT戦略を予測する"
+  default_prompt: "$pnd-forecast-japan-index-nt を使って、現在判断の有効期限を含む日経225・TOPIXとNT取引を分析してください。"
+policy:
+  allow_implicit_invocation: true
