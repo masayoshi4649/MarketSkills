@@ -565,7 +565,7 @@ OpenAI公式では、SKILLは繰り返し可能なワークフローを教える
 作成候補名は次の4つです。
 
 - `pnd-forecast-japan-index-nt`
-- `pnd-rank-japan-stock-rebounds-v2`
+- `pnd-rank-japan-stock-rebounds`
 - `pnd-rank-japan-growth-markets`
 - `pnd-forecast-japan-stock`
 
