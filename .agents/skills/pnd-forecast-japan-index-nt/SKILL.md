@@ -1,6 +1,6 @@
 ---
 name: pnd-forecast-japan-index-nt
-description: 日経225とTOPIXを現在板から予測し、次の材料変動候補窓と絶対JST有効期限、ファンダメンタルズ・需給を分離した4象限分布、現在NT倍率とTOPIX mini 1枚の等価枚数、NT端数方向、D1～D5の中心値・予測帯、入口・出口・撤退を提示する。日本株指数の方向、NTロング・ショート、先物・OP、SQ、為替・金利・海外市場・商品・暗号・経済指標・予測市場を含む取引判断を求められたときに使う。
+description: 日経225とTOPIXを日中・ナイトの現在セッションの板から予測し、次の材料変動候補窓と絶対JST有効期限、ファンダメンタルズ・需給を分離した4象限分布、現在NT倍率とTOPIX mini 1枚の等価枚数、NT端数方向、D1～D5の中心値・予測帯、入口・出口・撤退を提示する。日本株指数の方向、NTロング・ショート、日中先物・ナイト先物・OP、SQ、為替・金利・海外市場・商品・暗号・経済指標・予測市場を含む取引判断を求められたときに使う。
 ---
 
 # 日経225・TOPIX・NTを現在時点から予測する
@@ -25,6 +25,11 @@ description: 日経225とTOPIXを現在板から予測し、次の材料変動�
 - 市場データ機能が提供されている場合は最初に`datalist`で契約を確認する。機能自体がない場合は公式Web・利用可能な読取providerへ切り替え、ライブ板が取れなければ具体的な入口・枚数を保留する。未確認のdataset名を推測しない。
 - 公式カレンダー、JPX仕様、一次論文は読取専用の検索・ブラウザで確認してよい。
 - Polymarketは公開市場・板・価格を分析材料として使う。
+- 価格系列の鮮度優先順位は`kabus (tier 1 / execution_anchor) > 225225.jp family (tier 2 / near_realtime_context) > J-Quants (tier 3 / scheduled_history) > other_market (tier 4)`とする。ただし、現在NT・入口・枚数の両脚板アンカーはKabusだけに限り、tier 2～4で代替しない。J-Quantsは定時履歴、`other_market`は上位providerが無効な場合の価格文脈候補であり、公式仕様、取引カレンダー、経済日程にはこの価格系優先順位を適用せず公式原典を優先する。
+- 全価格取得候補と採否は`market_data_freshness.source_registry`と`source_selection_audit`に残す。各registry行の`coverage_items`へ対応する価格coverage項目を結び、`execution_anchor`は空配列、J-Quants定時履歴は`["jquants"]`に固定する。採用sourceは有効な最上位tierのうち`data_as_of_jst`が最も新しい候補とする。J-Quants registryには対応する`dataset_id`を持たせ、`data_as_of_jst`を最新データの公表時刻、`latest_available_reference_date`を制度上の対象日として分離する。同一datasetに複数sourceがある場合、`schedule_profile_id`、`frequency`、`publication_schedule_source_id`、公式窓の開始・終端、公式予定列をdataset-global契約として完全一致させる。J-Quantsを1件でも登録した場合は、`jquants_publication_calendar_source_id`、24時間以内の`jquants_publication_calendar_checked_at_jst`、分析週月曜の21日前から始まる動的長の`jquants_publication_calendar`を必須にする。基準終端は同月曜27日後、各週次dataset終端は基準終端と当該6公表entryの最大公表日の遅い方、共有終端は基準終端と全週次dataset終端の最大日とする。開始日から共有終端まで49～90暦日を過不足なく連続させ、最大終端を同月曜68日後とし、余分なpaddingを拒否する。週次datasetがなければ最短49暦日とする。`timing.session_calendar`との重複日を一致させる。日次datasetの`latest_expected_update_jst`と`expected_latest_reference_date`は共有列とprofile時刻から内部導出する。定時更新履歴は一律の日数だけで鮮度判定せず、`jquants_dataset_updates`で公式更新目安、最新公表時刻、実際・期待の最新対象日を照合する。取引カレンダーは定時4profileに擬制せず、専用の取得時刻・対象日・公式日列で監査する。
+- 週次J-Quants更新は第4営業日や曜日だけで推測しない。各週次dataset更新行に`official_schedule_complete: true`、分析週月曜14日前の`official_schedule_window_start_date`、基準終端と当該6 entryの最大公表日の遅い方である`official_schedule_window_end_date`、6行の`official_publication_schedule`を持たせる。予定窓は最短42～最大83暦日で、余分に延長しない。予定列は、窓開始日の7日前を月曜とする6連続対象週それぞれの最終現物営業日を`reference_date`とする6行へ完全一致させ、release時刻・reference日を重複なしの厳密な昇順にする。各`release_at_jst`の日付はJPX公式公表予定、時分はJ-Quants更新profileから取り、共有calendar上の現物営業日へ結ぶ。JPX市場統計の公表時刻とJ-Quants APIの更新目安を混同しない。週次には日次profileの最大未来日数を適用しない。日次datasetにこれら週次専用フィールドを指定せず、旧`publication_week_calendar`も指定しない。
+- 日次・週次とも、`latest_available_published_at_jst <= as_of_jst`かつ公式公表日と実公表日が同じで、対応対象日を取得済みなら、profile目安時刻前の到着を同日早着として許す。日次は観測済み当日予定から次の現物営業日へ期待更新を進め、`awaiting_scheduled_update`・`is_latest_available: true`だけを許し、早着を理由に`updated`としない。週次の到来済み予定は`release_at_jst <= as_of_jst`で決めるが、有効かつ選択済みsourceの実対象日が同日早着した未来entryなら最後の到来済み対象日を越えてよい。観測済みentryより後の最初のentryを次回予定とし、次回があれば`awaiting_scheduled_update`・true、最終entryの早着で次回がなければ観測済み最終entryを期待値として`updated`・trueにする。`early_arrival_observed`、`observed_schedule_update_jst`、`observed_schedule_reference_date`を必ず確認する。
+- 早着でない週次では、実際の`latest_available_reference_date`を6対象日のいずれか、かつ最後の到来済み対象日以下とし、対応する公式公表日を実際の最新公表日以前にする。実際の対象日が最後の到来済み対象日より古ければ、その到来済み予定を`latest_expected_update_jst`・`expected_latest_reference_date`へ据えて`delayed`・`is_latest_available: false`とし、分析をholdする。追い付いて次回予定があれば次回を期待更新、実際の対象日を期待対象日として`awaiting_scheduled_update`・true、次回がなければ最後の到来済み予定を期待値として`updated`・trueにする。純計算器出力の`last_due_update_jst`、`last_due_reference_date`、`next_scheduled_update_jst`、`next_scheduled_reference_date`で遷移を監査する。非選択のstale／invalid backupは6対象日より古い対象日を保持できるが、coverageや分析へ利用しない。
 - [scripts/index_nt_calculator.py](scripts/index_nt_calculator.py)は取得済みJSONの純計算専用とし、ネット取得へ改造しない。
 - [scripts/economic_toolkit.py](scripts/economic_toolkit.py)は索引で選んだ教科書の式が今回の材料へ必要な場合だけ使う。歴史・制度・因果識別を機械計算へ置き換えず、取得機能を追加しない。
 
@@ -43,6 +48,8 @@ description: 日経225とTOPIXを現在板から予測し、次の材料変動�
 - `予測の有効期限`: 4象限と売買方向を再計算すべき期限
 
 これらとは別に、回答を出す実行時のOS実時計を監査する。`as_of`がOS実時計より30秒超未来、120秒超過去、またはOS実時計が入口板・予測の絶対有効期限以後なら、計算値は監査用に残しても`status: hold`とする。入力JSON内の自己申告時刻を実時計の代わりにしない。
+
+予測の有効期限は現在の連続立会内に限り、日中は当日15:40、ナイトは翌05:55の`continuous_end_jst`を越えない。立会終了の15:45／翌06:00、次セッション、休場をまたぐ予測に外挿しない。
 
 変動候補窓には、イベント名、時刻、発生確率または予定確度、影響度、関連性、根拠を付ける。価格が必ず動く時刻とは断定しない。イベントが見つからない場合も、確認範囲と次のモデル再推定時刻を示す。
 
@@ -67,7 +74,7 @@ description: 日経225とTOPIXを現在板から予測し、次の材料変動�
 
 ただし、最大50%超を数学的に強制した値は勝率ではない。[references/判定と枚数計算.md](references/判定と枚数計算.md)の射影を使い、「四択制約後比較値」と明記する。生モデル確率は改変せず隣に残す。生モデルが今回と同じ`horizon_seconds`のウォークフォワード検証、象限別件数、損失、確率帯別実現率のゲートを通った場合だけ「期限時点方向の推定的中率相当」と呼べる。取引損益の勝率とは呼ばない。未校正なら「生モデル確率」と呼ぶ。
 
-全base方式に`base_provenance`を持たせ、方式、推定器ID、モデル構造ID、学習打切時刻、今回と同じ期限、原典、モデル成果物SHA-256を固定する。現在のbase予測出力は別の`prediction_output_sha256`で改変検知する。ウォークフォワード校正は同じ方式・推定器・構造・モデル成果物SHA-256へ結び付け、現在予測の動的な平均・分散・重みそのものを校正IDと同一視しない。Polymarket等のシナリオ重みを使う場合、重みの出典と`P(q|s)`を生成した条件付き4象限モデルの来歴・非Polymarket原典を分離して監査する。
+全base方式に`base_provenance`を持たせ、方式、推定器ID、モデル構造ID、学習打切時刻、今回と同じ期限、原典、モデル成果物SHA-256、`supported_origin_sessions`、`session_path_definition_id: current_continuous_session_no_recess_crossing_v1`を固定する。現在のbase予測出力は別の`prediction_output_sha256`で改変検知する。ウォークフォワード校正は同じ方式・推定器・構造・モデル成果物SHA-256・対応セッション・pathへ結び付け、現在予測の動的な平均・分散・重みそのものを校正IDと同一視しない。Polymarket等のシナリオ重みを使う場合、重みの出典と`P(q|s)`を生成した条件付き4象限モデルの来歴・非Polymarket原典を分離して監査する。
 
 自己申告したSHA-256や`validation_passed`だけで情報源・モデル成果物の真正性は保証できない。純計算器の`status: ok`は入力形式、OS実時計に対する現在性、時刻関係、数理不変条件を通過したという意味に限定する。回答には一次資料、対象時刻、モデル来歴、反証を残す。
 
@@ -102,7 +109,7 @@ NTロングまたはNTショートを推奨する場合、採用整数枚数に�
 
 ### 5. D1～D5の1週間パスを出す
 
-J-Quants取引カレンダーで次の5営業日の実日付を決め、日経225とTOPIXを各5行で出す。
+JPX取引日を収録するJ-Quants取引カレンダーで現物営業日を確認する。D1起算に使う`holiday_division`は先物セッション開始暦日の区分であり、`as_of_jst`暦日の現物区分`cash_market_holiday_division`と混同しない。通常の日中セッションでは`exchange_trading_day`の翌暦日から、ナイトまたはデリバティブ祝日日中では`exchange_trading_day`から暦日を連続走査し、最初の現物営業日5本をD1～D5とする。`daily_forecast.calendar_sessions`ではcash営業日を区分1・2、先物開場を区分1・3と完全一致させ、土日は区分0かつ両市場falseにする。J-Quants共有公表calendarと重なる日はcash真偽・区分を一致させる。`HolidayDivision=3`は現物非営業・先物祝日取引とし、通常日に読み替えない。`HolidayDivision=2`の半日立会は現行の15:30目標profileが対応しないため、純計算器が入力検証で拒否する。日経225とTOPIXを各5行で出す。
 
 - 収束予想中心値（条件付き分布中央値）
 - 現在アンカー比
@@ -116,13 +123,16 @@ J-Quants取引カレンダーで次の5営業日の実日付を決め、日経22
 - 変動幅の算出元
 - 当日の主要イベント
 
-日経は有効なOPから増分分散・歪度を得ることを優先し、方向ドリフトをファンダメンタルズと需給から置く。TOPIXはJ-Quantsの同期日足、EWMA・経験分位、日経との縮小相関を基本にする。各日へ累積σではなく前日予測点からの増分σを入力する。非ゼロ方向寄与は検証合格済み`drift_model_provenance`と、合計bpが申告値へ一致するブロック別帰属を必須にする。`major_events`が空の日はイベントドリフトとイベント増分σを0にし、イベントσを使う日は`event_variance_event_ids`へ当日の重要イベントを記録する。非対称累積分位は正の累積σと幅を整合させ、D1からD5へ縮小させない。OPのリスク中立分布を実現確率へ読み替えない。D1～D5を1つの5日終点だけで代用しない。
+日経は有効なOPから増分分散・歪度を得ることを優先し、方向ドリフトをファンダメンタルズと需給から置く。TOPIXはJ-Quantsの同期日足、EWMA・経験分位、日経との縮小相関を基本にする。各日へ累積σではなく前日予測点からの増分σを入力する。非ゼロ方向寄与は現在セッション対応を含む検証合格済み`drift_model_provenance`と、合計bpが申告値へ一致するブロック別帰属を必須にする。`major_events`が空の日はイベントドリフトとイベント増分σを0にし、イベントσを使う日は`event_variance_event_ids`へ当日の重要イベントを記録する。非対称累積分位は正の累積σと幅を整合させ、D1からD5へ縮小させない。OPのリスク中立分布を実現確率へ読み替えない。D1～D5を1つの5日終点だけで代用しない。
 
 ## 実行手順
 
 ### 1. 分析時点と対象を固定する
 
-- 現在日時を日本時間の絶対日時で確定し、現物、日中先物、ナイト先物、休場を区別する。
+- 現在日時を日本時間の絶対日時で確定する。`cash_market_state`と`cash_market_holiday_division`を`as_of_jst`暦日の現物状態として持ち、先物の`futures_session_kind`・`futures_session_phase`・セッション開始暦日の`holiday_division`と分ける。現物休場を先物休場と同一視しない。
+- JPX公式に従い、指数先物の日中は08:45～15:45、ナイトは17:00～翌06:00とする。連続立会終了はそれぞれ15:40・翌05:55なので、クロージング・オークションを連続立会とみなさない。通常はナイト開始から直後の翌営業日日中終了までを同じ`exchange_trading_day`へ結び付け、午前0時跨ぎ後も取引日を暦日へ書き換えない。祝日取引連鎖では直後の日中開始日より後の取引日へ属し得るため、「必ず翌営業日」と固定しない。
+- 純計算器は日中・ナイトの`regular`だけを受理する。`pre_closing`、セッション外、休場、状態不明は入力検証で拒否し、次の`regular`で板を再取得する。予測有効期限は現在の`continuous_end_jst`（日中15:40／ナイト翌05:55）を越えない。
+- `timing.session_calendar`へセッション開始日から`exchange_trading_day`までの全暦日を連続して入れ、各行に`date`、`cash_is_trading_day`、`derivatives_session_open`、`holiday_division`を持たせる。開始日区分、`as_of_jst`暦日の`cash_market_holiday_division`、セッション終了日以後で最初の先物開場日としての`next_session_start_jst`、次の現物営業日としての`exchange_trading_day`をこの列へ結合する。日中は両区分を一致させ、ナイトの日付跨ぎでは分離する。cash区分が1以外なら`cash_market_state=holiday_closed`、cash区分2は未対応として拒否する。`is_derivatives_holiday_trading`はsession列内の区分3の有無と完全一致させる。祝日取引は現物とデリバティブで別判定し、セッション区分3の日中や祝日前営業日のナイトが後日の同一`exchange_trading_day`へ属し得ることを公式sourceで確認する。
 - 計算直前にOS実時計を再取得し、分析時刻との差、入口板期限、予測期限を現在性ゲートで検証する。
 - TOPIX miniと日経225 mini・microの共通して取引可能な四半期限月を選ぶ。`DerivMonth=0`任せにしない。
 - 予測アンカーは現在板中値とする。前日終値は、すでに起きた変化と織込みを説明する文脈だけに使う。
@@ -132,14 +142,14 @@ J-Quants取引カレンダーで次の5営業日の実日付を決め、日経22
 
 [references/データ契約.md](references/データ契約.md)の順序とゲートに従う。
 
-最初に利用可能な読取能力を確認する。`datalist`があれば契約済みproviderとdatasetを使い、なければ公式Web・利用可能な読取providerへ切り替える。ライブ両脚板の代替がなければ、調査は継続しても具体的な入口・枚数は保留する。
+最初に利用可能な読取能力を確認する。`datalist`があれば契約済みproviderとdatasetを使い、なければ公式Web・利用可能な読取providerへ切り替える。ライブ両脚板をKabusから取得できなければ、tier 2～4で代用せず、調査は継続しても具体的な入口・枚数は保留する。
 
-- 実行アンカー: 同一限月両脚板、数量、スプレッド、取引最終日、公式の最終取引可能時刻、現在セッション
+- 実行アンカー: Kabusの同一限月両脚板、数量、スプレッド、取引最終日、公式の最終取引可能時刻、現在先物セッションとphase、JPX取引日
 - ファンダメンタルズ: ニュース、公式経済カレンダー、リアルタイム為替、JGB・UST、海外株・先物、原油、金、BTC・ETH、主要構成銘柄、政策、地政学、関連するPolymarket
 - 需給: 業種の広がり、日経寄与度、先物板・ベーシス、投資部門別、売買内訳、信用、空売り、手口・建玉、OP、SQ・ロール
 - 1週間モデル: 同期した日経・TOPIX日足、OP総分散、営業日カレンダー
 
-各市場横断項目は「利用」「不採用」「取得不能」のいずれかを記録し、利用・不採用にはデータ対象時刻を持たせる。利用時は複数の`source_ids`を登録し、各IDを有効倍率が正の証拠、重みが正のシナリオ、シナリオ条件付きモデル、イベント、4象限baseモデル、NT相対価値・相対σ、日次ドリフト、営業日または変動幅へ実際に結び付ける。品質0の証拠や重み0のシナリオを消費先に数えない。Polymarketだけは関連市場がなければ「非該当」を許す。取得不能を中立材料とみなさない。リアルタイムFX、経済カレンダー、海外市場を含むcoverage分析ゲートが未達なら保留する。
+各市場横断項目は「利用」「不採用」「取得不能」のいずれかを記録し、利用・不採用にはデータ対象時刻を持たせる。利用時は複数の`source_ids`を登録し、各IDを有効倍率が正の証拠、重みが正のシナリオ、シナリオ条件付きモデル、イベント、4象限baseモデル、NT相対価値・相対σ、日次ドリフト、営業日または変動幅へ実際に結び付ける。`coverage.data_as_of_jst`は全source・全利用先の観測時刻の最大値とし、価格およびregistry登録済みJ-Quants定時履歴の各消費link時刻は該当registryの`data_as_of_jst`へ一致させる。純計算器出力の`coverage_consumed_sources`では各`coverage_item`・`source_id`組に、重複排除して昇順化した全消費観測時刻を`observed_at_jst`配列で残す。品質0の証拠や重み0のシナリオを消費先に数えない。Polymarketだけは関連市場がなければ「非該当」を許す。取得不能を中立材料とみなさない。リアルタイムFX、経済カレンダー、海外市場を含むcoverage分析ゲートが未達なら保留する。
 
 ### 3. 証拠台帳を作る
 
@@ -163,7 +173,7 @@ D5までのイベント候補を走査し、[references/判定と枚数計算.md
 
 ### 5. 純計算ツールで検算する
 
-取得・推論結果をJSONへ正規化し、実行環境がある場合は次を必ず実行する。
+取得・推論結果を`schema_version: "6.0.0"`のJSONへ正規化し、実行環境がある場合は次を必ず実行する。純計算器出力の`model_version`は`"5.0.0"`とし、4象限生成モデルの`probability.model_version`と混同しない。
 
 初回または入力項目が不明な場合だけ[assets/計算入力例.json](assets/計算入力例.json)を読み、架空値を全て取得済み実データへ置換する。実入力では`sample_only: false`を明示し、`_sample_notice`だけを削除する。合成model、商品ID、URI、情報源が残れば計算器が拒否する。入力例のままなら出力は`sample_only`となり、実分析の数値として扱わない。
 
@@ -186,6 +196,7 @@ python .agents/skills/pnd-forecast-japan-index-nt/scripts/index_nt_calculator.py
 - `local_position_gate_passed`はコスト、名目差、流動性、相対価値だけの局所判定とする。最終推奨には`status: ok`と`local_position_gate_passed: true`の両方を必要とし、期限やcoverage等の全体保留を局所判定で上書きしない。
 - NT相対ドリフト3成分は有効なファンダ・需給証拠または重要イベントへbp単位で帰属させ、合計を申告値と一致させる。イベント帰属は分析時刻より後かつ4象限・NT評価期限以前に限定し、期限後イベントへの先回り効果は現在観測済みのファンダまたは需給証拠として扱う。相対σの原典と期限一致の`model_provenance`を別に残し、未検証モデルならNTを採用しない。
 - 申告往復コストは現在の両脚bid・askから計算する観測最低コスト以上とする。4象限の予測有効期限とD5は、NT推奨の有無にかかわらず共通限月の公式最終取引可能時刻を越えない。
+- 4象限base、シナリオ条件付き4象限、NT相対価値、日次ドリフトの全model provenanceとウォークフォワード校正に`supported_origin_sessions`と`session_path_definition_id: current_continuous_session_no_recess_crossing_v1`を必須とする。現在の日中・ナイト種別が検証対象に含まれなければ採用しない。
 - 四択制約後比較値だけを根拠に売買しない。
 
 ### 7. 入口・出口・撤退を作る
@@ -215,6 +226,9 @@ python .agents/skills/pnd-forecast-japan-index-nt/scripts/index_nt_calculator.py
 ## 最終確認
 
 - 回答の全日時を可能な限りJSTへ変換し、`yyyy/MM/dd HH:mm:ss (JST)`へ統一したか。
+- `timing.session_calendar`で開始日・as_of日・次session開始日・exchange trading dayを結び、`as_of_jst`暦日のcash区分・現物状態と、先物のsession開始日区分・種別・phaseを分けたか。日中08:45～15:45、ナイト17:00～翌06:00、連続立会終了、JPX取引日を公式sourceで監査したか。
+- 価格系の候補をKabus > 225225.jp family > J-Quants > other_marketの役割付き台帳と採否監査に残し、`coverage_items`の結合、有効な最上位tier内の最新観測選択、Kabus現在板アンカーを確認したか。同一datasetの複数sourceでdataset-global公式契約を完全一致させたか。J-Quantsの共有公表calendarは分析週月曜21日前から、基準終端と全週次datasetの最大公表日の遅い方まで49～90暦日を過不足なく持ち、公式source・確認時刻・session列重複日が整合するか。日次は現在以後最初の現物営業日、または同日早着後の次営業日から期待値を導出したか。週次は月曜14日前から動的終端までの最短42～最大83暦日公式窓、6連続対象週の最終現物営業日と完全一致する6公表entry、公表日のcash営業日、JPX公表日とJ-Quants更新profile時刻の役割分離を監査したか。実到着対象日、最後の到来済み予定、次回予定から期待更新・期待対象日・availability・最新性と4つの到来／次回出力を導出し、早着3出力と最終entry早着時のupdated遷移を確認したか。有効な選択sourceを6対象日と公式公表日へ結び、古い非選択backupを利用していないか。週次を第4営業日へ固定せず、日次用の最大未来日数を適用せず、日次datasetに週次専用フィールドまたは旧`publication_week_calendar`を指定せず、取引カレンダーを定時更新profileと混同していないか。
+- D1～D5の`calendar_sessions`でcash営業日・先物開場をHolidayDivisionへ一致させ、土日を両市場休場とし、J-Quants共有公表calendarとの全重複日を一致させたか。
 - 入口板期限、次の材料変動候補窓、予測有効期限を絶対JSTで分離したか。
 - D1～D5を予測理由より前へ置き、独立した売買設計章の要素を第1章へ統合したか。
 - 索引から必要な教科書だけを読み、使用概念と現在データ・反証を対応付けたか。
@@ -232,13 +246,13 @@ python .agents/skills/pnd-forecast-japan-index-nt/scripts/index_nt_calculator.py
 - ファンダメンタルズと需給を独立に分析し、両方を統合したか。
 - 為替、経済カレンダー、Polymarket、海外市場、JGB・UST、原油、金、暗号を確認または欠損表示したか。
 - 必須12項目の`coverage`を利用・不採用・取得不能・Polymarketのみ非該当のいずれかで監査したか。
-- `used`の全coverage sourceに証拠、シナリオ重み・条件付きモデル、イベント、base・相対・日次モデル、分散、営業日等の実際の消費先があり、`other`情報源は鮮度付き台帳へ登録したか。
+- `used`の全coverage sourceに証拠、シナリオ重み・条件付きモデル、イベント、base・相対・日次モデル、分散、営業日等の実際の消費先があり、coverage対象時刻が全利用先の最新観測時刻、価格・J-Quantsの各利用時刻がregistry観測時刻と一致するか。`other`情報源は鮮度付き台帳へ登録したか。
 - `TOPIX mini 1枚 = 日経mini x.x枚 = 日経micro x.x枚`を現在NTで出したか。
 - NT推奨時に端数の符号、円額、超過脚、方向予測を出したか。
 - D1～D5を実日付5行で、日経・TOPIXの中心値と68%・90%帯を出したか。
 - D1～D5内の重要イベントIDが該当する最初の予測点に過不足なく記録されているか。
 - 非ゼロの日次F/S/E寄与が有効な証拠・当日イベントへbp単位で帰属し、イベントなし日のイベントドリフト・イベントσが0か。
-- 分析翌日からD5までの全暦日をopen・closedで確認し、そこから次の5営業日を導出したか。
+- D1起算にsession開始暦日の`holiday_division`を使い、通常日中は`exchange_trading_day`の翌暦日、ナイト・祝日日中は`exchange_trading_day`からD5までの全暦日を各日`HolidayDivision`付きで確認し、そこから次の現物営業日5本を導出したか。半日立会が含まれば未対応としたか。
 - 非対称予測帯が正の累積σに対して厳密な幅を持ち、累積σ相当の0.5～2.0倍かつ日次非縮小か。
 - 呼値が日経5・TOPIX mini 0.25と一致し、丸め後価格が正、68%帯が中心を含み、90%帯が68%帯を包含するか。
 - 予測有効期限がD5イベント探索上限以前で、予測期限とD5が共通限月の取引最終日以前か。

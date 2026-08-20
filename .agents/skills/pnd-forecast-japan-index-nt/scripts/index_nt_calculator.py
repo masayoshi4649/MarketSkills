@@ -16,8 +16,8 @@ from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-MODEL_VERSION = "4.0.0"
-SCHEMA_VERSION = "5.0.0"
+MODEL_VERSION = "5.0.0"
+SCHEMA_VERSION = "6.0.0"
 DISPLAY_DATETIME_FORMAT = "%Y/%m/%d %H:%M:%S"
 DISPLAY_DATETIME_SUFFIX = " (JST)"
 TOP_LEVEL_FIELDS = frozenset(
@@ -31,6 +31,7 @@ TOP_LEVEL_FIELDS = frozenset(
         "calibration",
         "nt",
         "daily_forecast",
+        "market_data_freshness",
         "coverage",
         "other_sources",
     }
@@ -88,6 +89,61 @@ COVERAGE_USED_MAX_AGE_HOURS = {
     "jquants": 168.0,
     "options": 5.0 / 60.0,
 }
+FUTURES_SESSION_KINDS = ("day_session", "night_session")
+FUTURES_SESSION_PHASES = ("regular", "pre_closing")
+CASH_MARKET_STATES = ("open", "recess", "closed", "holiday_closed")
+HOLIDAY_DIVISIONS = ("0", "1", "2", "3")
+MARKET_DATA_PROVIDER_PRIORITY = {
+    "kabus": 1,
+    "225225": 2,
+    "jquants": 3,
+    "other_market": 4,
+}
+LIVE_PROVIDER_MAX_AGE_SECONDS = {
+    "kabus": 120.0,
+    "225225": 300.0,
+}
+KABUS_MARKET_CODES = {
+    "day_session": (2, 23),
+    "night_session": (2, 24),
+}
+MARKET_DATA_ROLES = (
+    "execution_anchor",
+    "near_realtime_context",
+    "scheduled_history",
+)
+MARKET_DATA_SOURCE_STATUSES = (
+    "valid",
+    "stale",
+    "unavailable",
+    "invalid",
+    "not_supported",
+)
+PRICE_COVERAGE_ITEMS = (
+    "realtime_fx",
+    "overseas_markets",
+    "jgb",
+    "ust",
+    "oil",
+    "gold",
+    "crypto",
+    "options",
+)
+JQUANTS_UPDATE_PROFILES = {
+    "daily_prices_1630": (16, 30, "daily", 10, 10),
+    "investor_type_weekly_1800": (18, 0, "weekly", 8, 21),
+    "trading_breakdown_1800": (18, 0, "daily", 10, 10),
+    "issue_open_interest_2115": (21, 15, "daily", 10, 10),
+}
+JQUANTS_DATASET_PROFILES = {
+    "daily-prices": "daily_prices_1630",
+    "investor-type": "investor_type_weekly_1800",
+    "trading-breakdown": "trading_breakdown_1800",
+    "issue-open-interest": "issue_open_interest_2115",
+}
+JQUANTS_PUBLICATION_CALENDAR_START_OFFSET_DAYS = 21
+JQUANTS_PUBLICATION_CALENDAR_BASE_END_OFFSET_DAYS = 27
+JQUANTS_PUBLICATION_CALENDAR_MAX_END_OFFSET_DAYS = 68
 
 
 class InputValidationError(ValueError):
@@ -304,10 +360,28 @@ def _validated_model_provenance(
         f"{context}.source_links",
         as_of_jst,
     )
+    supported_origin_sessions = _normalized_identifier_list(
+        spec.get("supported_origin_sessions"),
+        f"{context}.supported_origin_sessions",
+    )
+    if any(value not in FUTURES_SESSION_KINDS for value in supported_origin_sessions):
+        raise InputValidationError(
+            f"{context}.supported_origin_sessions はday_session/night_sessionだけにしてください。"
+        )
+    session_path_definition_id = _required_text(
+        spec.get("session_path_definition_id"),
+        f"{context}.session_path_definition_id",
+    )
+    if session_path_definition_id != "current_continuous_session_no_recess_crossing_v1":
+        raise InputValidationError(
+            f"{context}.session_path_definition_id は current_continuous_session_no_recess_crossing_v1 にしてください。"
+        )
     return {
         **text_values,
         "training_data_cutoff_jst": _format_jst(training_cutoff),
         "horizon_seconds": horizon_seconds,
+        "supported_origin_sessions": supported_origin_sessions,
+        "session_path_definition_id": session_path_definition_id,
         "validation_passed": validation_passed,
         "source_links": source_links,
     }
@@ -697,6 +771,1643 @@ def _format_jst(value: datetime) -> str:
         str: yyyy/MM/dd HH:mm:ss (JST)形式の文字列。
     """
     return value.astimezone(JST).strftime(DISPLAY_DATETIME_FORMAT) + DISPLAY_DATETIME_SUFFIX
+
+
+# ----------------------------------------
+
+
+def _required_text(value: Any, name: str) -> str:
+    """
+    機能:
+        必須の文字列を前後空白除去付きで検証する。
+
+    引数:
+        value (Any): 検証対象の値。
+        name (str): エラー表示用の項目名。
+
+    返り値:
+        str: 空でないことを確認した文字列。
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise InputValidationError(f"{name} は非空文字列にしてください。")
+    return value.strip()
+
+
+# ----------------------------------------
+
+
+def _parse_iso_date(value: Any, name: str) -> date:
+    """
+    機能:
+        YYYY-MM-DD形式の日付を解析する。
+
+    引数:
+        value (Any): 解析対象の値。
+        name (str): エラー表示用の項目名。
+
+    返り値:
+        date: 解析済みの日付。
+    """
+    if not isinstance(value, str):
+        raise InputValidationError(f"{name} はYYYY-MM-DD文字列にしてください。")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise InputValidationError(f"{name} はYYYY-MM-DD文字列にしてください。") from exc
+
+
+# ----------------------------------------
+
+
+def validate_session_context(spec: Mapping[str, Any], as_of_jst: datetime) -> dict[str, Any]:
+    """
+    機能:
+        日中・ナイト先物の公式時刻、JPX取引日、現物市場状態を検証する。
+
+    引数:
+        spec (Mapping[str, Any]): timingブロックに含まれるセッション情報。
+        as_of_jst (datetime): 分析基準の日本時間。
+
+    返り値:
+        dict[str, Any]: D1起算日と入口可否を含む正規化済みセッション情報。
+    """
+    session_kind = spec.get("futures_session_kind")
+    if session_kind not in FUTURES_SESSION_KINDS:
+        raise InputValidationError(
+            "timing.futures_session_kind は day_session または night_session にしてください。"
+        )
+    session_phase = spec.get("futures_session_phase")
+    if session_phase not in FUTURES_SESSION_PHASES:
+        raise InputValidationError(
+            "timing.futures_session_phase は regular または pre_closing にしてください。"
+        )
+    cash_market_state = spec.get("cash_market_state")
+    if cash_market_state not in CASH_MARKET_STATES:
+        raise InputValidationError(
+            "timing.cash_market_state は open、recess、closed、holiday_closed のいずれかにしてください。"
+        )
+
+    session_start = _parse_jst(spec.get("session_start_jst"), "timing.session_start_jst")
+    continuous_end = _parse_jst(spec.get("continuous_end_jst"), "timing.continuous_end_jst")
+    session_end = _parse_jst(spec.get("session_end_jst"), "timing.session_end_jst")
+    next_session_start = _parse_jst(
+        spec.get("next_session_start_jst"),
+        "timing.next_session_start_jst",
+    )
+    if not session_start <= as_of_jst < session_end:
+        raise InputValidationError("as_of_jst を申告した先物セッションの開始以上・終了未満にしてください。")
+    if session_start.weekday() >= 5:
+        raise InputValidationError("土日に開始する指数先物セッションは指定できません。")
+    if not session_start < continuous_end < session_end <= next_session_start:
+        raise InputValidationError(
+            "先物セッション時刻は開始 < ザラバ終了 < セッション終了 <= 次セッション開始にしてください。"
+        )
+
+    if session_kind == "day_session":
+        expected_start = datetime.combine(session_start.date(), datetime.min.time(), JST).replace(
+            hour=8,
+            minute=45,
+        )
+        expected_continuous_end = expected_start.replace(hour=15, minute=40)
+        expected_end = expected_start.replace(hour=15, minute=45)
+        expected_next_start = expected_start.replace(hour=17, minute=0)
+        if (
+            session_start != expected_start
+            or continuous_end != expected_continuous_end
+            or session_end != expected_end
+            or next_session_start != expected_next_start
+        ):
+            raise InputValidationError(
+                "日中先物は08:45開始・15:40ザラバ終了・15:45終了・17:00次セッション開始に固定してください。"
+            )
+    else:
+        expected_start = datetime.combine(session_start.date(), datetime.min.time(), JST).replace(
+            hour=17,
+            minute=0,
+        )
+        expected_continuous_end = expected_start + timedelta(hours=12, minutes=55)
+        expected_end = expected_start + timedelta(hours=13)
+        if (
+            session_start != expected_start
+            or continuous_end != expected_continuous_end
+            or session_end != expected_end
+        ):
+            raise InputValidationError(
+                "ナイト先物は17:00開始・翌05:55ザラバ終了・翌06:00終了に固定してください。"
+            )
+        if (
+            next_session_start < session_end
+            or (next_session_start.hour, next_session_start.minute, next_session_start.second) != (8, 45, 0)
+            or next_session_start.weekday() >= 5
+            or next_session_start - session_end > timedelta(days=10)
+        ):
+            raise InputValidationError(
+                "ナイト後の次セッション開始は06:00以後10日以内の営業日08:45にしてください。"
+            )
+
+    expected_phase = "regular" if as_of_jst < continuous_end else "pre_closing"
+    if session_phase != expected_phase:
+        raise InputValidationError("timing.futures_session_phase をas_of_jstの公式時間帯と一致させてください。")
+
+    holiday_division = str(spec.get("holiday_division", "")).strip()
+    if holiday_division not in HOLIDAY_DIVISIONS:
+        raise InputValidationError("timing.holiday_division はJ-Quants定義の0、1、2、3で指定してください。")
+    cash_market_holiday_division = str(spec.get("cash_market_holiday_division", "")).strip()
+    if cash_market_holiday_division not in HOLIDAY_DIVISIONS:
+        raise InputValidationError(
+            "timing.cash_market_holiday_division はas_of_jst当日のJ-Quants定義0、1、2、3で指定してください。"
+        )
+    is_holiday_trading = spec.get("is_derivatives_holiday_trading")
+    if not isinstance(is_holiday_trading, bool):
+        raise InputValidationError("timing.is_derivatives_holiday_trading は真偽値にしてください。")
+    if holiday_division == "3" and not is_holiday_trading:
+        raise InputValidationError(
+            "holiday_division=3 では is_derivatives_holiday_trading=true にしてください。"
+        )
+    if cash_market_holiday_division == "3" and not is_holiday_trading:
+        raise InputValidationError(
+            "as_of_jst当日がholiday_division=3なら is_derivatives_holiday_trading=true にしてください。"
+        )
+    if cash_market_holiday_division == "2":
+        raise InputValidationError("半日立会日はcash_market_holiday_division=2として自動予測できません。")
+    if holiday_division not in ("1", "3"):
+        raise InputValidationError("開場中の先物セッションはholiday_division=1または3にしてください。")
+
+    exchange_trading_day = _parse_iso_date(
+        spec.get("exchange_trading_day"),
+        "timing.exchange_trading_day",
+    )
+    if exchange_trading_day.weekday() >= 5:
+        raise InputValidationError("timing.exchange_trading_day はJPX営業日にしてください。")
+    session_calendar_raw = _require_sequence(
+        spec.get("session_calendar"),
+        "timing.session_calendar",
+    )
+    expected_session_calendar_length = (exchange_trading_day - session_start.date()).days + 1
+    if expected_session_calendar_length < 1 or expected_session_calendar_length > 11:
+        raise InputValidationError(
+            "timing.session_calendarはセッション開始日からexchange_trading_dayまで11暦日以内にしてください。"
+        )
+    if len(session_calendar_raw) != expected_session_calendar_length:
+        raise InputValidationError(
+            "timing.session_calendarはセッション開始日からexchange_trading_dayまで全暦日を指定してください。"
+        )
+    session_calendar: list[dict[str, Any]] = []
+    for calendar_index, raw_calendar_row in enumerate(session_calendar_raw):
+        calendar_row = _require_mapping(
+            raw_calendar_row,
+            f"timing.session_calendar[{calendar_index}]",
+        )
+        calendar_date = _parse_iso_date(
+            calendar_row.get("date"),
+            f"timing.session_calendar[{calendar_index}].date",
+        )
+        expected_calendar_date = session_start.date() + timedelta(days=calendar_index)
+        if calendar_date != expected_calendar_date:
+            raise InputValidationError("timing.session_calendarの日付をセッション開始日から連続させてください。")
+        calendar_holiday_division = str(calendar_row.get("holiday_division", "")).strip()
+        if calendar_holiday_division not in HOLIDAY_DIVISIONS:
+            raise InputValidationError("timing.session_calendarのholiday_divisionが不正です。")
+        if calendar_holiday_division == "2":
+            raise InputValidationError("半日立会を含むsession_calendarは現行予測profileで扱えません。")
+        cash_is_trading_day = calendar_row.get("cash_is_trading_day")
+        derivatives_session_open = calendar_row.get("derivatives_session_open")
+        if not isinstance(cash_is_trading_day, bool) or not isinstance(derivatives_session_open, bool):
+            raise InputValidationError(
+                "timing.session_calendarのcash_is_trading_dayとderivatives_session_openは真偽値にしてください。"
+            )
+        if cash_is_trading_day != (calendar_holiday_division == "1"):
+            raise InputValidationError(
+                "timing.session_calendarのcash_is_trading_dayをholiday_division=1と一致させてください。"
+            )
+        if derivatives_session_open != (calendar_holiday_division in ("1", "3")):
+            raise InputValidationError(
+                "timing.session_calendarの先物開場状態をholiday_division=1または3と一致させてください。"
+            )
+        if calendar_date.weekday() >= 5 and (
+            cash_is_trading_day or derivatives_session_open or calendar_holiday_division != "0"
+        ):
+            raise InputValidationError("timing.session_calendarの土日を現物・先物開場日にできません。")
+        session_calendar.append(
+            {
+                "date": calendar_date.isoformat(),
+                "cash_is_trading_day": cash_is_trading_day,
+                "derivatives_session_open": derivatives_session_open,
+                "holiday_division": calendar_holiday_division,
+            }
+        )
+    if session_calendar[0]["holiday_division"] != holiday_division:
+        raise InputValidationError("timing.holiday_divisionをsession_calendar開始日と一致させてください。")
+    as_of_calendar_rows = [row for row in session_calendar if row["date"] == as_of_jst.date().isoformat()]
+    if not as_of_calendar_rows or as_of_calendar_rows[0]["holiday_division"] != cash_market_holiday_division:
+        raise InputValidationError(
+            "timing.cash_market_holiday_divisionをsession_calendarのas_of_jst暦日と一致させてください。"
+        )
+    future_derivatives_rows = [
+        row
+        for row in session_calendar
+        if row["date"] >= session_end.date().isoformat() and row["derivatives_session_open"]
+    ]
+    if not future_derivatives_rows or future_derivatives_rows[0]["date"] != next_session_start.date().isoformat():
+        raise InputValidationError(
+            "timing.next_session_start_jstをsession_calendar上の最初の後続先物開場日へ一致させてください。"
+        )
+    cash_search_rows = session_calendar if session_kind == "day_session" else session_calendar[1:]
+    first_cash_row = next((row for row in cash_search_rows if row["cash_is_trading_day"]), None)
+    if first_cash_row is None or first_cash_row["date"] != exchange_trading_day.isoformat():
+        raise InputValidationError(
+            "timing.exchange_trading_dayをsession_calendar上の次の現物営業日へ一致させてください。"
+        )
+    chain_has_holiday_trading = any(row["holiday_division"] == "3" for row in session_calendar)
+    if is_holiday_trading != chain_has_holiday_trading:
+        raise InputValidationError(
+            "timing.is_derivatives_holiday_tradingをsession_calendarのHolidayDivision=3有無と一致させてください。"
+        )
+    calendar_start_date = (
+        exchange_trading_day + timedelta(days=1)
+        if session_kind == "day_session" and holiday_division == "1"
+        else exchange_trading_day
+    )
+
+    if cash_market_holiday_division != "1":
+        expected_cash_state = "holiday_closed"
+    elif session_kind == "night_session":
+        expected_cash_state = "closed"
+    else:
+        current_time = as_of_jst.timetz().replace(tzinfo=None)
+        if datetime.min.time().replace(hour=9) <= current_time < datetime.min.time().replace(hour=11, minute=30):
+            expected_cash_state = "open"
+        elif datetime.min.time().replace(hour=12, minute=30) <= current_time < datetime.min.time().replace(hour=15, minute=30):
+            expected_cash_state = "open"
+        elif datetime.min.time().replace(hour=11, minute=30) <= current_time < datetime.min.time().replace(hour=12, minute=30):
+            expected_cash_state = "recess"
+        else:
+            expected_cash_state = "closed"
+    if cash_market_state != expected_cash_state:
+        raise InputValidationError("timing.cash_market_state を現物市場の公式時間帯と一致させてください。")
+
+    session_checked_at = _parse_jst(
+        spec.get("session_checked_at_jst"),
+        "timing.session_checked_at_jst",
+    )
+    if session_checked_at > as_of_jst:
+        raise InputValidationError("timing.session_checked_at_jst が分析時刻より未来です。")
+    if (as_of_jst - session_checked_at).total_seconds() > COVERAGE_CHECK_MAX_AGE_HOURS * 3600:
+        raise InputValidationError("先物セッション予定の確認が24時間より古いです。")
+
+    return {
+        "cash_market_state": cash_market_state,
+        "futures_session_kind": session_kind,
+        "futures_session_phase": session_phase,
+        "exchange_trading_day": exchange_trading_day.isoformat(),
+        "holiday_division": holiday_division,
+        "cash_market_holiday_division": cash_market_holiday_division,
+        "is_derivatives_holiday_trading": is_holiday_trading,
+        "session_calendar": session_calendar,
+        "session_start_jst": _format_jst(session_start),
+        "continuous_end_jst": _format_jst(continuous_end),
+        "session_end_jst": _format_jst(session_end),
+        "next_session_start_jst": _format_jst(next_session_start),
+        "session_schedule_source_id": _required_text(
+            spec.get("session_schedule_source_id"),
+            "timing.session_schedule_source_id",
+        ),
+        "session_schedule_source_url": _required_text(
+            spec.get("session_schedule_source_url"),
+            "timing.session_schedule_source_url",
+        ),
+        "session_checked_at_jst": _format_jst(session_checked_at),
+        "calendar_start_date": calendar_start_date.isoformat(),
+        "entry_phase_valid": session_phase == "regular",
+    }
+
+
+# ----------------------------------------
+
+
+def _derive_jquants_publication_calendar_end(
+    jquants_updates_raw: Sequence[Any],
+    as_of_jst: datetime,
+) -> date:
+    """
+    機能:
+        週次公式公表予定の最大公表日から共有J-Quantsカレンダーの必要終端日を導出する。
+
+    引数:
+        jquants_updates_raw (Sequence[Any]): dataset別の未正規化J-Quants更新監査列。
+        as_of_jst (datetime): 分析基準の日本時間。
+
+    返り値:
+        date: 基本49暦日と全週次公式公表予定を過不足なく覆う共有カレンダー終端日。
+    """
+    week_monday = as_of_jst.date() - timedelta(days=as_of_jst.weekday())
+    base_end = week_monday + timedelta(
+        days=JQUANTS_PUBLICATION_CALENDAR_BASE_END_OFFSET_DAYS
+    )
+    maximum_end = week_monday + timedelta(
+        days=JQUANTS_PUBLICATION_CALENDAR_MAX_END_OFFSET_DAYS
+    )
+    shared_end = base_end
+    for update_index, raw_update in enumerate(jquants_updates_raw):
+        update = _require_mapping(
+            raw_update,
+            f"jquants_dataset_updates[{update_index}]",
+        )
+        dataset_id = _required_text(
+            update.get("dataset_id"),
+            f"jquants_dataset_updates[{update_index}].dataset_id",
+        )
+        profile_id = JQUANTS_DATASET_PROFILES.get(dataset_id.casefold())
+        if profile_id is None or JQUANTS_UPDATE_PROFILES[profile_id][2] != "weekly":
+            continue
+        raw_schedule = _require_sequence(
+            update.get("official_publication_schedule"),
+            f"J-Quants週次更新 '{dataset_id}' の official_publication_schedule",
+        )
+        if not raw_schedule:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の公式公表予定を1件以上指定してください。"
+            )
+        release_dates: list[date] = []
+        for schedule_index, raw_schedule_row in enumerate(raw_schedule):
+            schedule_row = _require_mapping(
+                raw_schedule_row,
+                f"J-Quants週次更新 '{dataset_id}' official_publication_schedule[{schedule_index}]",
+            )
+            release_at = _parse_jst(
+                schedule_row.get("release_at_jst"),
+                f"J-Quants週次更新 '{dataset_id}' official_publication_schedule[{schedule_index}].release_at_jst",
+            )
+            release_dates.append(release_at.date())
+        dataset_end = max(base_end, max(release_dates))
+        if dataset_end > maximum_end:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の公式公表予定が共有カレンダーの最大90暦日を超えています。"
+            )
+        shared_end = max(shared_end, dataset_end)
+    return shared_end
+
+
+# ----------------------------------------
+
+
+def _derive_daily_jquants_expected_state(
+    dataset_id: str,
+    as_of_jst: datetime,
+    publication_cash_dates: Sequence[date],
+    expected_hour: int,
+    expected_minute: int,
+    latest_available_reference_date: date,
+    latest_available_published_at_jst: datetime,
+) -> dict[str, Any]:
+    """
+    機能:
+        日次J-Quantsの通常予定と同日早着を分け、支配的な次回予定・期待対象日を導出する。
+
+    引数:
+        dataset_id (str): エラー表示用のJ-Quants dataset識別子。
+        as_of_jst (datetime): 分析基準の日本時間。
+        publication_cash_dates (Sequence[date]): 共有カレンダー内の現物営業日列。
+        expected_hour (int): 公式profileの更新目安時。
+        expected_minute (int): 公式profileの更新目安分。
+        latest_available_reference_date (date): 実際に取得できた最新対象日。
+        latest_available_published_at_jst (datetime): 実際に取得できた最新公表時刻。
+
+    返り値:
+        dict[str, Any]: 支配的な予定時刻、期待対象日、同日早着監査値。
+    """
+    ordered_cash_dates = sorted(publication_cash_dates)
+    if latest_available_published_at_jst > as_of_jst:
+        raise InputValidationError(
+            f"J-Quants日次更新 '{dataset_id}' の実公表時刻を分析時刻より未来にできません。"
+        )
+    future_or_current_cash_dates = [
+        calendar_date
+        for calendar_date in ordered_cash_dates
+        if calendar_date >= as_of_jst.date()
+    ]
+    if not future_or_current_cash_dates:
+        raise InputValidationError(
+            f"J-Quants日次更新 '{dataset_id}' の次回公表営業日を共有カレンダーから導出できません。"
+        )
+    current_schedule_date = future_or_current_cash_dates[0]
+    current_schedule_update = datetime.combine(
+        current_schedule_date,
+        datetime.min.time(),
+        tzinfo=JST,
+    ).replace(hour=expected_hour, minute=expected_minute)
+    early_arrival_observed = (
+        latest_available_reference_date == current_schedule_date
+        and latest_available_published_at_jst.date() == current_schedule_date
+        and latest_available_published_at_jst < current_schedule_update
+    )
+    if early_arrival_observed:
+        later_cash_dates = [
+            calendar_date
+            for calendar_date in ordered_cash_dates
+            if calendar_date > current_schedule_date
+        ]
+        if not later_cash_dates:
+            raise InputValidationError(
+                f"J-Quants日次更新 '{dataset_id}' の同日早着後の次回公表営業日を共有カレンダーから導出できません。"
+            )
+        next_schedule_date = later_cash_dates[0]
+        expected_update = datetime.combine(
+            next_schedule_date,
+            datetime.min.time(),
+            tzinfo=JST,
+        ).replace(hour=expected_hour, minute=expected_minute)
+        expected_reference = current_schedule_date
+    else:
+        expected_update = current_schedule_update
+        if expected_update <= as_of_jst:
+            expected_reference = current_schedule_date
+        else:
+            previous_cash_dates = [
+                calendar_date
+                for calendar_date in ordered_cash_dates
+                if calendar_date < current_schedule_date
+            ]
+            if not previous_cash_dates:
+                raise InputValidationError(
+                    f"J-Quants日次更新 '{dataset_id}' の直前対象日を共有カレンダーから導出できません。"
+                )
+            expected_reference = previous_cash_dates[-1]
+    return {
+        "expected_update": expected_update,
+        "expected_reference": expected_reference,
+        "early_arrival_observed": early_arrival_observed,
+        "observed_schedule_update": (
+            current_schedule_update if early_arrival_observed else None
+        ),
+        "observed_schedule_reference": (
+            current_schedule_date if early_arrival_observed else None
+        ),
+    }
+
+
+# ----------------------------------------
+
+
+def _derive_weekly_jquants_arrival_state(
+    dataset_id: str,
+    release_rows: Sequence[tuple[datetime, date]],
+    as_of_jst: datetime,
+    latest_available_reference_date: date,
+    latest_available_published_at_jst: datetime,
+    strict_current_source: bool,
+) -> dict[str, Any]:
+    """
+    機能:
+        週次公式予定の時計到来と実データ到着を分離し、支配予定・状態・監査値を導出する。
+
+    引数:
+        dataset_id (str): エラー表示用のJ-Quants dataset識別子。
+        release_rows (Sequence[tuple[datetime, date]]): 時刻・対象日昇順の公式予定列。
+        as_of_jst (datetime): 分析基準の日本時間。
+        latest_available_reference_date (date): 実際に取得できた最新対象日。
+        latest_available_published_at_jst (datetime): 実際に取得できた最新公表時刻。
+        strict_current_source (bool): 有効かつ選択済みsourceとして予定へ厳密結合するか。
+
+    返り値:
+        dict[str, Any]: 支配的な予定、時計到来、次回予定、実到着監査値。
+    """
+    reference_release_map = {
+        reference_date: release_at
+        for release_at, reference_date in release_rows
+    }
+    if latest_available_published_at_jst > as_of_jst:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の実公表時刻を分析時刻より未来にできません。"
+        )
+    due_releases = [row for row in release_rows if row[0] <= as_of_jst]
+    if not due_releases:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の直近到来済み公表を公式予定列から導出できません。"
+        )
+    last_due_update, last_due_reference = due_releases[-1]
+    if strict_current_source and latest_available_reference_date not in reference_release_map:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の有効な選択sourceの最新取得対象日を6件の公式予定対象日へ一致させてください。"
+        )
+    observed_schedule_update: datetime | None = None
+    observed_schedule_reference: date | None = None
+    early_arrival_observed = False
+    if strict_current_source:
+        observed_schedule_update = reference_release_map[
+            latest_available_reference_date
+        ]
+        observed_schedule_reference = latest_available_reference_date
+        if observed_schedule_update.date() > latest_available_published_at_jst.date():
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の最新取得対象日に対応する公式公表日が実際の最新公表日より後です。"
+            )
+        early_arrival_observed = observed_schedule_update > as_of_jst
+    if (
+        latest_available_reference_date > last_due_reference
+        and not early_arrival_observed
+    ):
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の最新取得対象日は未到来の公式公表対象日です。"
+        )
+    effective_arrived_reference = (
+        latest_available_reference_date
+        if early_arrival_observed
+        else last_due_reference
+    )
+    future_releases = [
+        row
+        for row in release_rows
+        if row[1] > effective_arrived_reference
+    ]
+    next_scheduled_update: datetime | None = None
+    next_scheduled_reference: date | None = None
+    if future_releases:
+        next_scheduled_update, next_scheduled_reference = future_releases[0]
+    if latest_available_reference_date < last_due_reference:
+        expected_update = last_due_update
+        expected_reference = last_due_reference
+        expected_availability_status = "delayed"
+    elif next_scheduled_update is not None:
+        expected_update = next_scheduled_update
+        expected_reference = latest_available_reference_date
+        expected_availability_status = "awaiting_scheduled_update"
+    elif early_arrival_observed:
+        expected_update = observed_schedule_update
+        expected_reference = latest_available_reference_date
+        expected_availability_status = "updated"
+    else:
+        expected_update = last_due_update
+        expected_reference = last_due_reference
+        expected_availability_status = "updated"
+    return {
+        "expected_update": expected_update,
+        "expected_reference": expected_reference,
+        "expected_availability_status": expected_availability_status,
+        "last_due_update": last_due_update,
+        "last_due_reference": last_due_reference,
+        "next_scheduled_update": next_scheduled_update,
+        "next_scheduled_reference": next_scheduled_reference,
+        "early_arrival_observed": early_arrival_observed,
+        "observed_schedule_update": observed_schedule_update,
+        "observed_schedule_reference": observed_schedule_reference,
+        "reference_release_map": reference_release_map,
+        "strict_current_source": strict_current_source,
+    }
+
+
+# ----------------------------------------
+
+
+def _validate_weekly_publication_schedule(
+    update: Mapping[str, Any],
+    dataset_id: str,
+    as_of_jst: datetime,
+    publication_calendar_by_date: Mapping[date, Mapping[str, Any]],
+    latest_available_reference_date: date,
+    latest_available_published_at_jst: datetime,
+    strict_current_source: bool = True,
+) -> dict[str, Any]:
+    """
+    機能:
+        週次J-Quantsの公式公表予定を検証し、特例日を含む支配的な更新時刻と期待対象日を導出する。
+
+    引数:
+        update (Mapping[str, Any]): dataset別の更新監査入力。
+        dataset_id (str): エラー表示用のJ-Quants dataset識別子。
+        as_of_jst (datetime): 分析基準の日本時間。
+        publication_calendar_by_date (Mapping[date, Mapping[str, Any]]): 共有公表営業日カレンダー。
+        latest_available_reference_date (date): 実際に取得できた最新統計対象日。
+        latest_available_published_at_jst (datetime): 実際に取得できた最新公表時刻。
+        strict_current_source (bool): 有効かつ選択済みsourceとして6件予定へ厳密結合するか。
+
+    返り値:
+        dict[str, Any]: 支配的な予定、到来済み・次回予定、正規化済み公式予定列。
+    """
+    if update.get("official_schedule_complete") is not True:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' はofficial_schedule_complete=trueにしてください。"
+        )
+    schedule_profile_id = JQUANTS_DATASET_PROFILES.get(dataset_id.casefold())
+    if schedule_profile_id is None:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の公式更新profileが未対応です。"
+        )
+    expected_hour, expected_minute, _, _, _ = JQUANTS_UPDATE_PROFILES[schedule_profile_id]
+    week_monday = as_of_jst.date() - timedelta(days=as_of_jst.weekday())
+    expected_window_start = week_monday - timedelta(days=14)
+    base_window_end = week_monday + timedelta(
+        days=JQUANTS_PUBLICATION_CALENDAR_BASE_END_OFFSET_DAYS
+    )
+    maximum_window_end = week_monday + timedelta(
+        days=JQUANTS_PUBLICATION_CALENDAR_MAX_END_OFFSET_DAYS
+    )
+    window_start = _parse_iso_date(
+        update.get("official_schedule_window_start_date"),
+        f"J-Quants週次更新 '{dataset_id}' の official_schedule_window_start_date",
+    )
+    window_end = _parse_iso_date(
+        update.get("official_schedule_window_end_date"),
+        f"J-Quants週次更新 '{dataset_id}' の official_schedule_window_end_date",
+    )
+    if window_start != expected_window_start:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の公式予定確認窓の開始日を分析週月曜14日前へ一致させてください。"
+        )
+    if not base_window_end <= window_end <= maximum_window_end:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の公式予定確認窓終端を基本終端以上・最大90暦日以内にしてください。"
+        )
+    raw_schedule = _require_sequence(
+        update.get("official_publication_schedule"),
+        f"J-Quants週次更新 '{dataset_id}' の official_publication_schedule",
+    )
+    if not raw_schedule:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の公式公表予定を1件以上指定してください。"
+        )
+    schedule: list[dict[str, Any]] = []
+    release_rows: list[tuple[datetime, date]] = []
+    previous_release: datetime | None = None
+    previous_reference_date: date | None = None
+    for schedule_index, raw_schedule_row in enumerate(raw_schedule):
+        schedule_row = _require_mapping(
+            raw_schedule_row,
+            f"J-Quants週次更新 '{dataset_id}' official_publication_schedule[{schedule_index}]",
+        )
+        release_at = _parse_jst(
+            schedule_row.get("release_at_jst"),
+            f"J-Quants週次更新 '{dataset_id}' official_publication_schedule[{schedule_index}].release_at_jst",
+        )
+        reference_date = _parse_iso_date(
+            schedule_row.get("reference_date"),
+            f"J-Quants週次更新 '{dataset_id}' official_publication_schedule[{schedule_index}].reference_date",
+        )
+        if (
+            release_at.hour,
+            release_at.minute,
+            release_at.second,
+            release_at.microsecond,
+        ) != (expected_hour, expected_minute, 0, 0):
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の公式公表日へJ-Quants更新目安{expected_hour:02d}:{expected_minute:02d} JSTを適用してください。"
+            )
+        if not window_start <= release_at.date() <= window_end:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の公式公表予定を確認窓内にしてください。"
+            )
+        if release_at.date() > maximum_window_end:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の公式公表予定が共有カレンダーの最大90暦日を超えています。"
+            )
+        calendar_row = publication_calendar_by_date.get(release_at.date())
+        if calendar_row is None or not calendar_row["cash_is_trading_day"]:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の公式公表日を共有カレンダーの現物営業日にしてください。"
+            )
+        if reference_date >= release_at.date():
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の対象日を公表日より前にしてください。"
+            )
+        reference_calendar_row = publication_calendar_by_date.get(reference_date)
+        if reference_calendar_row is None or not reference_calendar_row["cash_is_trading_day"]:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の対象日を共有カレンダー内の現物営業日にしてください。"
+            )
+        reference_week_monday = reference_date - timedelta(days=reference_date.weekday())
+        reference_week_cash_dates = [
+            calendar_date
+            for calendar_date, calendar_row in publication_calendar_by_date.items()
+            if reference_week_monday <= calendar_date <= reference_week_monday + timedelta(days=6)
+            and calendar_row["cash_is_trading_day"]
+        ]
+        if not reference_week_cash_dates or reference_date != reference_week_cash_dates[-1]:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の対象日を当該週の最終現物営業日へ一致させてください。"
+            )
+        if previous_release is not None and release_at <= previous_release:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の公式公表予定を重複なしの時刻昇順にしてください。"
+            )
+        if previous_reference_date is not None and reference_date <= previous_reference_date:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の対象日を重複なしの日付昇順にしてください。"
+            )
+        previous_release = release_at
+        previous_reference_date = reference_date
+        release_rows.append((release_at, reference_date))
+        schedule.append(
+            {
+                "release_at_jst": _format_jst(release_at),
+                "reference_date": reference_date.isoformat(),
+            }
+        )
+    expected_window_end = max(base_window_end, max(row[0].date() for row in release_rows))
+    if window_end != expected_window_end:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の公式予定確認窓終端を基本終端と6件の最大公表日の遅い方へ一致させてください。"
+        )
+    expected_reference_dates: list[date] = []
+    first_reference_week_monday = window_start - timedelta(days=7)
+    for reference_week_index in range(6):
+        reference_week_monday = first_reference_week_monday + timedelta(
+            days=7 * reference_week_index
+        )
+        reference_week_cash_dates = [
+            calendar_date
+            for calendar_date, calendar_row in publication_calendar_by_date.items()
+            if reference_week_monday
+            <= calendar_date
+            <= reference_week_monday + timedelta(days=6)
+            and calendar_row["cash_is_trading_day"]
+        ]
+        if not reference_week_cash_dates:
+            raise InputValidationError(
+                f"J-Quants週次更新 '{dataset_id}' の対象週に現物営業日がなく、現行profileで導出できません。"
+            )
+        expected_reference_dates.append(reference_week_cash_dates[-1])
+    if [reference_date for _, reference_date in release_rows] != expected_reference_dates:
+        raise InputValidationError(
+            f"J-Quants週次更新 '{dataset_id}' の公式予定列を6対象週の最終現物営業日と完全一致させてください。"
+        )
+    arrival_state = _derive_weekly_jquants_arrival_state(
+        dataset_id,
+        release_rows,
+        as_of_jst,
+        latest_available_reference_date,
+        latest_available_published_at_jst,
+        strict_current_source,
+    )
+    return {**arrival_state, "schedule": schedule}
+
+
+# ----------------------------------------
+
+
+def validate_market_data_freshness(
+    spec: Mapping[str, Any],
+    nt_spec: Mapping[str, Any],
+    session_context: Mapping[str, Any],
+    as_of_jst: datetime,
+) -> dict[str, Any]:
+    """
+    機能:
+        価格情報源の固定優先順位、板アンカー、J-Quants定時更新を検証する。
+
+    引数:
+        spec (Mapping[str, Any]): 情報源台帳、選択監査、J-Quants更新監査。
+        nt_spec (Mapping[str, Any]): 両脚の銘柄・限月・板時刻・source_id。
+        session_context (Mapping[str, Any]): 検証済みの日中またはナイトセッション。
+        as_of_jst (datetime): 分析基準の日本時間。
+
+    返り値:
+        dict[str, Any]: 固定tier、選択結果、板アンカー期限を含む鮮度監査。
+    """
+    registry_raw = _require_mapping(spec.get("source_registry"), "market_data_freshness.source_registry")
+    if not registry_raw:
+        raise InputValidationError("market_data_freshness.source_registry を1件以上指定してください。")
+    registry: dict[str, dict[str, Any]] = {}
+    seen_source_ids: set[str] = set()
+    for raw_source_id in sorted(registry_raw):
+        source_id = _required_text(raw_source_id, "market_data_freshness.source_registry のsource_id")
+        source_key = source_id.casefold()
+        if source_key in seen_source_ids:
+            raise InputValidationError("market_data_freshness.source_registry のsource_idが正規化後に重複しています。")
+        seen_source_ids.add(source_key)
+        row = _require_mapping(
+            registry_raw[raw_source_id],
+            f"market_data_freshness.source_registry.{source_id}",
+        )
+        provider_family = row.get("provider_family")
+        if provider_family not in MARKET_DATA_PROVIDER_PRIORITY:
+            raise InputValidationError(f"情報源 '{source_id}' の provider_family が不正です。")
+        data_role = row.get("data_role")
+        if data_role not in MARKET_DATA_ROLES:
+            raise InputValidationError(f"情報源 '{source_id}' の data_role が不正です。")
+        if provider_family == "kabus" and data_role != "execution_anchor":
+            raise InputValidationError(f"Kabus情報源 '{source_id}' はexecution_anchorにしてください。")
+        if provider_family == "225225" and data_role != "near_realtime_context":
+            raise InputValidationError(f"225225.jp系情報源 '{source_id}' はnear_realtime_contextにしてください。")
+        if provider_family == "jquants" and data_role != "scheduled_history":
+            raise InputValidationError(f"J-Quants情報源 '{source_id}' はscheduled_historyにしてください。")
+        status = row.get("status")
+        if status not in MARKET_DATA_SOURCE_STATUSES:
+            raise InputValidationError(f"情報源 '{source_id}' の status が不正です。")
+        status_reason = _required_text(row.get("status_reason"), f"情報源 '{source_id}' の status_reason")
+        coverage_items_raw = _require_sequence(
+            row.get("coverage_items", []),
+            f"情報源 '{source_id}' の coverage_items",
+        )
+        coverage_item_links: list[str] = []
+        for coverage_index, raw_coverage_item in enumerate(coverage_items_raw):
+            coverage_item_link = _required_text(
+                raw_coverage_item,
+                f"情報源 '{source_id}' の coverage_items[{coverage_index}]",
+            )
+            if coverage_item_link not in (*PRICE_COVERAGE_ITEMS, "jquants"):
+                raise InputValidationError(f"情報源 '{source_id}' の coverage_items に未対応項目があります。")
+            if coverage_item_link in coverage_item_links:
+                raise InputValidationError(f"情報源 '{source_id}' の coverage_items が重複しています。")
+            coverage_item_links.append(coverage_item_link)
+        if data_role == "execution_anchor" and coverage_item_links:
+            raise InputValidationError(f"execution_anchor情報源 '{source_id}' にcoverage_itemsを指定できません。")
+        if provider_family == "jquants" and coverage_item_links != ["jquants"]:
+            raise InputValidationError(f"J-Quants情報源 '{source_id}' のcoverage_itemsはjquantsだけにしてください。")
+        checked_at = _parse_jst(row.get("checked_at_jst"), f"情報源 '{source_id}' の checked_at_jst")
+        if checked_at > as_of_jst:
+            raise InputValidationError(f"情報源 '{source_id}' の checked_at_jst が分析時刻より未来です。")
+        if (as_of_jst - checked_at).total_seconds() > COVERAGE_CHECK_MAX_AGE_HOURS * 3600:
+            raise InputValidationError(f"情報源 '{source_id}' の確認が24時間より古いです。")
+        normalized: dict[str, Any] = {
+            "source_id": source_id,
+            "provider_family": provider_family,
+            "tier": MARKET_DATA_PROVIDER_PRIORITY[provider_family],
+            "data_role": data_role,
+            "coverage_items": coverage_item_links,
+            "series_key": _required_text(row.get("series_key"), f"情報源 '{source_id}' の series_key"),
+            "instrument_type": _required_text(
+                row.get("instrument_type"),
+                f"情報源 '{source_id}' の instrument_type",
+            ),
+            "symbol": _required_text(row.get("symbol"), f"情報源 '{source_id}' の symbol"),
+            "contract_month": _required_text(
+                row.get("contract_month"),
+                f"情報源 '{source_id}' の contract_month",
+            ),
+            "quote_type": _required_text(row.get("quote_type"), f"情報源 '{source_id}' の quote_type"),
+            "status": status,
+            "status_reason": status_reason,
+            "checked_at_jst": _format_jst(checked_at),
+            "data_as_of_jst": None,
+            "fetched_at_jst": None,
+            "max_age_seconds": None,
+            "data_age_seconds": None,
+            "valid_until_jst": None,
+            "kabus_market_code": None,
+            "dataset_id": None,
+        }
+        if status in ("valid", "stale", "invalid"):
+            data_as_of = _parse_jst(row.get("data_as_of_jst"), f"情報源 '{source_id}' の data_as_of_jst")
+            fetched_at = _parse_jst(row.get("fetched_at_jst"), f"情報源 '{source_id}' の fetched_at_jst")
+            if not data_as_of <= fetched_at <= checked_at <= as_of_jst:
+                raise InputValidationError(
+                    f"情報源 '{source_id}' はdata_as_of <= fetched_at <= checked_at <= as_ofにしてください。"
+                )
+            max_age_seconds = _bounded_float(
+                row.get("max_age_seconds"),
+                f"情報源 '{source_id}' の max_age_seconds",
+                0.001,
+                31_536_000.0,
+            )
+            if provider_family in LIVE_PROVIDER_MAX_AGE_SECONDS:
+                provider_max = LIVE_PROVIDER_MAX_AGE_SECONDS[provider_family]
+                if max_age_seconds > provider_max:
+                    raise InputValidationError(
+                        f"情報源 '{source_id}' のmax_age_secondsは{provider_family}上限{provider_max:.0f}秒以下にしてください。"
+                    )
+            data_age_seconds = (as_of_jst - data_as_of).total_seconds()
+            if status == "valid" and data_age_seconds > max_age_seconds:
+                raise InputValidationError(f"情報源 '{source_id}' はTTL超過のためstatus=validにできません。")
+            if status == "stale" and data_age_seconds <= max_age_seconds:
+                raise InputValidationError(f"情報源 '{source_id}' はTTL内のためstatus=staleと矛盾します。")
+            normalized.update(
+                {
+                    "data_as_of_jst": _format_jst(data_as_of),
+                    "fetched_at_jst": _format_jst(fetched_at),
+                    "max_age_seconds": max_age_seconds,
+                    "data_age_seconds": round(data_age_seconds, 3),
+                    "valid_until_jst": _format_jst(data_as_of + timedelta(seconds=max_age_seconds)),
+                }
+            )
+        if provider_family == "kabus":
+            market_code = _bounded_integer(
+                row.get("kabus_market_code"),
+                f"情報源 '{source_id}' の kabus_market_code",
+                1,
+                99,
+            )
+            allowed_codes = KABUS_MARKET_CODES[str(session_context["futures_session_kind"])]
+            if market_code not in allowed_codes:
+                raise InputValidationError(
+                    f"情報源 '{source_id}' のkabus_market_codeを現在セッション{allowed_codes}と一致させてください。"
+                )
+            normalized["kabus_market_code"] = market_code
+        if provider_family == "jquants" and normalized["quote_type"] == "bid_ask":
+            raise InputValidationError("J-Quantsを現在のbid/ask板として登録できません。")
+        if provider_family == "jquants":
+            dataset_id = _required_text(
+                row.get("dataset_id"),
+                f"情報源 '{source_id}' の dataset_id",
+            )
+            if dataset_id.casefold() not in JQUANTS_DATASET_PROFILES:
+                raise InputValidationError(f"情報源 '{source_id}' のJ-Quants dataset_idが未対応です。")
+            normalized["dataset_id"] = dataset_id
+        registry[source_id] = normalized
+
+    selections_raw = _require_sequence(
+        spec.get("source_selection_audit"),
+        "market_data_freshness.source_selection_audit",
+    )
+    selections: list[dict[str, Any]] = []
+    selections_by_key: dict[str, dict[str, Any]] = {}
+    for index, raw_selection in enumerate(selections_raw):
+        selection = _require_mapping(
+            raw_selection,
+            f"market_data_freshness.source_selection_audit[{index}]",
+        )
+        selection_key = _required_text(selection.get("selection_key"), f"選択監査[{index}] selection_key")
+        normalized_selection_key = selection_key.casefold()
+        if normalized_selection_key in selections_by_key:
+            raise InputValidationError("source_selection_audit.selection_key が重複しています。")
+        purpose = selection.get("purpose")
+        if purpose not in ("execution_anchor", "current_price_context", "scheduled_history"):
+            raise InputValidationError(f"選択監査 '{selection_key}' の purpose が不正です。")
+        series_key = _required_text(selection.get("series_key"), f"選択監査 '{selection_key}' の series_key")
+        selected_source_id = _required_text(
+            selection.get("selected_source_id"),
+            f"選択監査 '{selection_key}' の selected_source_id",
+        )
+        candidate_source_ids = _normalized_identifier_list(
+            selection.get("candidate_source_ids"),
+            f"選択監査 '{selection_key}' の candidate_source_ids",
+        )
+        if selected_source_id not in candidate_source_ids:
+            raise InputValidationError(f"選択監査 '{selection_key}' の選択元を候補一覧へ含めてください。")
+        unknown_sources = [source_id for source_id in candidate_source_ids if source_id not in registry]
+        if unknown_sources:
+            raise InputValidationError(
+                f"選択監査 '{selection_key}' に未登録source_idがあります: " + ", ".join(unknown_sources)
+            )
+        candidate_rows = [registry[source_id] for source_id in candidate_source_ids]
+        if any(row["series_key"] != series_key for row in candidate_rows):
+            raise InputValidationError(f"選択監査 '{selection_key}' の全候補を同じseries_keyにしてください。")
+        registered_series_sources = {
+            source_id
+            for source_id, row in registry.items()
+            if row["series_key"] == series_key
+        }
+        if set(candidate_source_ids) != registered_series_sources:
+            raise InputValidationError(
+                f"選択監査 '{selection_key}' は同じseries_keyの登録候補を省略・追加せず列挙してください。"
+            )
+        selected_row = registry[selected_source_id]
+        if selected_row["status"] != "valid":
+            raise InputValidationError(f"選択監査 '{selection_key}' はstatus=validの情報源を選択してください。")
+        valid_candidates = [row for row in candidate_rows if row["status"] == "valid"]
+        best_tier = min(row["tier"] for row in valid_candidates)
+        if selected_row["tier"] != best_tier:
+            raise InputValidationError(
+                f"選択監査 '{selection_key}' は有効な上位tierを飛ばして下位情報源を選べません。"
+            )
+        best_tier_candidates = [row for row in valid_candidates if row["tier"] == best_tier]
+        freshest_best_tier_time = max(
+            _parse_jst(row["data_as_of_jst"], f"選択監査 '{selection_key}' の候補時刻")
+            for row in best_tier_candidates
+        )
+        selected_time = _parse_jst(
+            selected_row["data_as_of_jst"],
+            f"選択監査 '{selection_key}' の選択時刻",
+        )
+        if selected_time != freshest_best_tier_time:
+            raise InputValidationError(
+                f"選択監査 '{selection_key}' は同一tier内で最も新しい観測を選択してください。"
+            )
+        if purpose == "execution_anchor" and (
+            selected_row["provider_family"] != "kabus"
+            or selected_row["data_role"] != "execution_anchor"
+        ):
+            raise InputValidationError("現在板のexecution_anchorはKabusの有効なbid/askに限定します。")
+        if purpose == "current_price_context" and selected_row["provider_family"] == "jquants":
+            raise InputValidationError("J-Quantsの定時更新データを現在価格へ昇格できません。")
+        if purpose == "scheduled_history" and selected_row["provider_family"] != "jquants":
+            raise InputValidationError("scheduled_historyの選択元はJ-Quantsにしてください。")
+        normalized_selection = {
+            "selection_key": selection_key,
+            "purpose": purpose,
+            "series_key": series_key,
+            "selected_source_id": selected_source_id,
+            "selected_provider_family": selected_row["provider_family"],
+            "selected_tier": selected_row["tier"],
+            "candidate_source_ids": candidate_source_ids,
+            "selection_reason": _required_text(
+                selection.get("selection_reason"),
+                f"選択監査 '{selection_key}' の selection_reason",
+            ),
+        }
+        selections.append(normalized_selection)
+        selections_by_key[normalized_selection_key] = normalized_selection
+
+    required_board_sources = {
+        "nikkei_execution_anchor": (
+            _required_text(nt_spec.get("nikkei_board_source_id"), "nt.nikkei_board_source_id"),
+            _required_text(nt_spec.get("nikkei_symbol"), "nt.nikkei_symbol"),
+            _parse_jst(nt_spec.get("nikkei_snapshot_jst"), "nt.nikkei_snapshot_jst"),
+            "nikkei225_futures",
+        ),
+        "topix_execution_anchor": (
+            _required_text(nt_spec.get("topix_board_source_id"), "nt.topix_board_source_id"),
+            _required_text(nt_spec.get("topix_symbol"), "nt.topix_symbol"),
+            _parse_jst(nt_spec.get("topix_snapshot_jst"), "nt.topix_snapshot_jst"),
+            "topix_futures",
+        ),
+    }
+    anchor_expiries: list[datetime] = []
+    for selection_key, (source_id, symbol, snapshot, instrument_type) in required_board_sources.items():
+        selection = selections_by_key.get(selection_key)
+        if selection is None:
+            raise InputValidationError(f"source_selection_audit に {selection_key} がありません。")
+        if selection["purpose"] != "execution_anchor" or selection["selected_source_id"] != source_id:
+            raise InputValidationError(f"{selection_key} をntの板source_idと一致させてください。")
+        source = registry.get(source_id)
+        if source is None:
+            raise InputValidationError(f"ntの板source_id '{source_id}' がsource_registryにありません。")
+        if (
+            source["provider_family"] != "kabus"
+            or source["data_role"] != "execution_anchor"
+            or source["status"] != "valid"
+            or source["quote_type"] != "bid_ask"
+            or source["symbol"] != symbol
+            or source["instrument_type"] != instrument_type
+            or source["contract_month"] != str(nt_spec.get("nikkei_contract_month" if instrument_type == "nikkei225_futures" else "topix_contract_month"))
+        ):
+            raise InputValidationError(f"{selection_key} の商品・限月・Kabus板属性をnt入力と一致させてください。")
+        source_as_of = _parse_jst(source["data_as_of_jst"], f"{selection_key}.data_as_of_jst")
+        if source_as_of != snapshot:
+            raise InputValidationError(f"{selection_key} のdata_as_of_jstをnt板時刻と一致させてください。")
+        anchor_expiries.append(_parse_jst(source["valid_until_jst"], f"{selection_key}.valid_until_jst"))
+
+    registered_jquants_source_ids = {
+        source_id
+        for source_id, row in registry.items()
+        if row["provider_family"] == "jquants"
+    }
+    jquants_updates_raw = _require_sequence(
+        spec.get("jquants_dataset_updates", []),
+        "market_data_freshness.jquants_dataset_updates",
+    )
+    publication_calendar: list[dict[str, Any]] = []
+    publication_calendar_by_date: dict[date, dict[str, Any]] = {}
+    publication_calendar_source_id: str | None = None
+    publication_calendar_checked_at: datetime | None = None
+    publication_week_monday = as_of_jst.date() - timedelta(days=as_of_jst.weekday())
+    publication_calendar_start = publication_week_monday - timedelta(
+        days=JQUANTS_PUBLICATION_CALENDAR_START_OFFSET_DAYS
+    )
+    publication_calendar_base_end = publication_week_monday + timedelta(
+        days=JQUANTS_PUBLICATION_CALENDAR_BASE_END_OFFSET_DAYS
+    )
+    publication_calendar_end = publication_calendar_base_end
+    if registered_jquants_source_ids:
+        publication_calendar_end = _derive_jquants_publication_calendar_end(
+            jquants_updates_raw,
+            as_of_jst,
+        )
+        publication_calendar_source_id = _required_text(
+            spec.get("jquants_publication_calendar_source_id"),
+            "market_data_freshness.jquants_publication_calendar_source_id",
+        )
+        publication_calendar_checked_at = _parse_jst(
+            spec.get("jquants_publication_calendar_checked_at_jst"),
+            "market_data_freshness.jquants_publication_calendar_checked_at_jst",
+        )
+        if publication_calendar_checked_at > as_of_jst:
+            raise InputValidationError("J-Quants公表営業日カレンダーの確認時刻が分析時刻より未来です。")
+        if (
+            as_of_jst - publication_calendar_checked_at
+        ).total_seconds() > COVERAGE_CHECK_MAX_AGE_HOURS * 3600:
+            raise InputValidationError("J-Quants公表営業日カレンダーの確認が24時間より古いです。")
+        publication_calendar_raw = _require_sequence(
+            spec.get("jquants_publication_calendar"),
+            "market_data_freshness.jquants_publication_calendar",
+        )
+        expected_calendar_length = (
+            publication_calendar_end - publication_calendar_start
+        ).days + 1
+        if len(publication_calendar_raw) != expected_calendar_length:
+            raise InputValidationError(
+                "jquants_publication_calendarは分析週月曜の21日前から、基本49暦日または週次公式公表6件の最大公表日までを過不足なく指定してください。"
+            )
+        for calendar_index, raw_calendar_row in enumerate(publication_calendar_raw):
+            calendar_row = _require_mapping(
+                raw_calendar_row,
+                f"jquants_publication_calendar[{calendar_index}]",
+            )
+            calendar_date = _parse_iso_date(
+                calendar_row.get("date"),
+                f"jquants_publication_calendar[{calendar_index}].date",
+            )
+            if calendar_date != publication_calendar_start + timedelta(days=calendar_index):
+                raise InputValidationError(
+                    "jquants_publication_calendarを分析週月曜の21日前から連続させてください。"
+                )
+            holiday_division = str(calendar_row.get("holiday_division", "")).strip()
+            if holiday_division not in HOLIDAY_DIVISIONS:
+                raise InputValidationError("jquants_publication_calendarのHolidayDivisionが不正です。")
+            cash_is_trading_day = calendar_row.get("cash_is_trading_day")
+            if not isinstance(cash_is_trading_day, bool):
+                raise InputValidationError(
+                    "jquants_publication_calendar.cash_is_trading_dayは真偽値にしてください。"
+                )
+            if cash_is_trading_day != (holiday_division in ("1", "2")):
+                raise InputValidationError(
+                    "jquants_publication_calendarの営業日とHolidayDivisionが矛盾します。"
+                )
+            if calendar_date.weekday() >= 5 and (
+                cash_is_trading_day or holiday_division != "0"
+            ):
+                raise InputValidationError(
+                    "jquants_publication_calendarの土日を現物営業日にできません。"
+                )
+            normalized_calendar_row = {
+                "date": calendar_date.isoformat(),
+                "cash_is_trading_day": cash_is_trading_day,
+                "holiday_division": holiday_division,
+            }
+            publication_calendar.append(normalized_calendar_row)
+            publication_calendar_by_date[calendar_date] = normalized_calendar_row
+        if date.fromisoformat(publication_calendar[-1]["date"]) != publication_calendar_end:
+            raise InputValidationError(
+                "jquants_publication_calendarの終端を週次公式公表予定から導出した最大公表日へ一致させてください。"
+            )
+        for session_row in session_context["session_calendar"]:
+            session_date = date.fromisoformat(session_row["date"])
+            publication_row = publication_calendar_by_date.get(session_date)
+            if publication_row is None or (
+                publication_row["cash_is_trading_day"] != session_row["cash_is_trading_day"]
+                or publication_row["holiday_division"] != session_row["holiday_division"]
+            ):
+                raise InputValidationError(
+                    "J-Quants公表営業日カレンダーをtiming.session_calendarと一致させてください。"
+                )
+    elif any(
+        spec.get(field_name) is not None
+        for field_name in (
+            "jquants_publication_calendar_source_id",
+            "jquants_publication_calendar_checked_at_jst",
+            "jquants_publication_calendar",
+        )
+    ):
+        raise InputValidationError(
+            "J-Quants情報源がない場合はjquants_publication_calendarを指定しないでください。"
+        )
+
+    jquants_updates: list[dict[str, Any]] = []
+    seen_jquants_update_sources: set[str] = set()
+    selected_scheduled_history_source_ids = {
+        row["selected_source_id"]
+        for row in selections
+        if row["purpose"] == "scheduled_history"
+    }
+    for index, raw_update in enumerate(jquants_updates_raw):
+        update = _require_mapping(raw_update, f"jquants_dataset_updates[{index}]")
+        dataset_id = _required_text(update.get("dataset_id"), f"jquants_dataset_updates[{index}].dataset_id")
+        source_id = _required_text(update.get("source_id"), f"J-Quants更新 '{dataset_id}' の source_id")
+        if source_id.casefold() in seen_jquants_update_sources:
+            raise InputValidationError("jquants_dataset_updates.source_id をdatasetごとに一意にしてください。")
+        seen_jquants_update_sources.add(source_id.casefold())
+        source = registry.get(source_id)
+        if (
+            source is None
+            or source["provider_family"] != "jquants"
+            or source["data_role"] != "scheduled_history"
+            or source["status"] not in ("valid", "stale", "invalid")
+        ):
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' のsource_idをJ-Quants台帳へ結び付けてください。")
+        schedule_profile_id = _required_text(
+            update.get("schedule_profile_id"),
+            f"J-Quants更新 '{dataset_id}' の schedule_profile_id",
+        )
+        if schedule_profile_id not in JQUANTS_UPDATE_PROFILES:
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' のschedule_profile_idが未対応です。")
+        expected_profile_id = JQUANTS_DATASET_PROFILES.get(dataset_id.casefold())
+        if expected_profile_id is None or schedule_profile_id != expected_profile_id:
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' のdataset_idとschedule_profile_idが対応していません。"
+            )
+        if str(source["dataset_id"]).casefold() != dataset_id.casefold():
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' のdataset_idをsource_registryのdataset_idと一致させてください。"
+            )
+        expected_hour, expected_minute, expected_frequency, max_future_days, max_past_days = (
+            JQUANTS_UPDATE_PROFILES[schedule_profile_id]
+        )
+        frequency = _required_text(
+            update.get("frequency"),
+            f"J-Quants更新 '{dataset_id}' の frequency",
+        )
+        if frequency != expected_frequency:
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' のfrequencyをprofileの{expected_frequency}と一致させてください。"
+            )
+        latest_reference = _parse_iso_date(
+            update.get("latest_available_reference_date"),
+            f"J-Quants更新 '{dataset_id}' の latest_available_reference_date",
+        )
+        latest_published_at = _parse_jst(
+            update.get("latest_available_published_at_jst"),
+            f"J-Quants更新 '{dataset_id}' の latest_available_published_at_jst",
+        )
+        if latest_reference > as_of_jst.date():
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' の対象日を分析日より未来にできません。"
+            )
+        if latest_published_at.date() < latest_reference:
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' の最新公表日を最新取得対象日以後にしてください。"
+            )
+        expected_update = _parse_jst(
+            update.get("latest_expected_update_jst"),
+            f"J-Quants更新 '{dataset_id}' の latest_expected_update_jst",
+        )
+        publication_cash_dates = [
+            calendar_date
+            for calendar_date, calendar_row in publication_calendar_by_date.items()
+            if calendar_row["cash_is_trading_day"]
+        ]
+        official_schedule_complete: bool | None = None
+        official_schedule_window_start_date: str | None = None
+        official_schedule_window_end_date: str | None = None
+        official_publication_schedule: list[dict[str, Any]] = []
+        weekly_expected_availability_status: str | None = None
+        weekly_reference_release_map: Mapping[date, datetime] = {}
+        last_due_update: datetime | None = None
+        last_due_reference: date | None = None
+        next_scheduled_update: datetime | None = None
+        next_scheduled_reference: date | None = None
+        early_arrival_observed = False
+        observed_schedule_update: datetime | None = None
+        observed_schedule_reference: date | None = None
+        strict_weekly_current_source = False
+        if expected_frequency == "daily":
+            if (
+                expected_update.hour,
+                expected_update.minute,
+                expected_update.second,
+                expected_update.microsecond,
+            ) != (expected_hour, expected_minute, 0, 0):
+                raise InputValidationError(
+                    f"J-Quants更新 '{dataset_id}' の予定時刻を{expected_hour:02d}:{expected_minute:02d} JSTへ一致させてください。"
+                )
+            daily_schedule_context = _derive_daily_jquants_expected_state(
+                dataset_id,
+                as_of_jst,
+                publication_cash_dates,
+                expected_hour,
+                expected_minute,
+                latest_reference,
+                latest_published_at,
+            )
+            derived_expected_update = daily_schedule_context["expected_update"]
+            derived_expected_reference = daily_schedule_context[
+                "expected_reference"
+            ]
+            early_arrival_observed = daily_schedule_context[
+                "early_arrival_observed"
+            ]
+            observed_schedule_update = daily_schedule_context[
+                "observed_schedule_update"
+            ]
+            observed_schedule_reference = daily_schedule_context[
+                "observed_schedule_reference"
+            ]
+            if expected_update != derived_expected_update:
+                raise InputValidationError(
+                    f"J-Quants日次更新 '{dataset_id}' の最新期待更新日時を共有公表営業日カレンダーと同日早着からの導出値へ一致させてください。"
+                )
+            if any(
+                update.get(field_name) is not None
+                for field_name in (
+                    "official_schedule_complete",
+                    "official_schedule_window_start_date",
+                    "official_schedule_window_end_date",
+                    "official_publication_schedule",
+                )
+            ):
+                raise InputValidationError(
+                    f"J-Quants日次更新 '{dataset_id}' に週次公式公表予定フィールドを指定しないでください。"
+                )
+        else:
+            strict_weekly_current_source = (
+                source["status"] == "valid"
+                and source_id in selected_scheduled_history_source_ids
+            )
+            weekly_schedule_context = _validate_weekly_publication_schedule(
+                update,
+                dataset_id,
+                as_of_jst,
+                publication_calendar_by_date,
+                latest_reference,
+                latest_published_at,
+                strict_weekly_current_source,
+            )
+            derived_expected_update = weekly_schedule_context["expected_update"]
+            derived_expected_reference = weekly_schedule_context["expected_reference"]
+            official_publication_schedule = weekly_schedule_context["schedule"]
+            weekly_expected_availability_status = weekly_schedule_context[
+                "expected_availability_status"
+            ]
+            weekly_reference_release_map = weekly_schedule_context[
+                "reference_release_map"
+            ]
+            last_due_update = weekly_schedule_context["last_due_update"]
+            last_due_reference = weekly_schedule_context["last_due_reference"]
+            next_scheduled_update = weekly_schedule_context["next_scheduled_update"]
+            next_scheduled_reference = weekly_schedule_context[
+                "next_scheduled_reference"
+            ]
+            early_arrival_observed = weekly_schedule_context[
+                "early_arrival_observed"
+            ]
+            observed_schedule_update = weekly_schedule_context[
+                "observed_schedule_update"
+            ]
+            observed_schedule_reference = weekly_schedule_context[
+                "observed_schedule_reference"
+            ]
+            if expected_update != derived_expected_update:
+                raise InputValidationError(
+                    f"J-Quants週次更新 '{dataset_id}' のlatest_expected_update_jstを公式公表予定列からの導出値へ一致させてください。"
+                )
+            official_schedule_complete = True
+            official_schedule_window_start_date = _parse_iso_date(
+                update.get("official_schedule_window_start_date"),
+                f"J-Quants週次更新 '{dataset_id}' の official_schedule_window_start_date",
+            ).isoformat()
+            official_schedule_window_end_date = _parse_iso_date(
+                update.get("official_schedule_window_end_date"),
+                f"J-Quants週次更新 '{dataset_id}' の official_schedule_window_end_date",
+            ).isoformat()
+        if expected_frequency == "daily":
+            schedule_offset = expected_update - as_of_jst
+            if schedule_offset > timedelta(days=max_future_days) or schedule_offset < -timedelta(days=max_past_days):
+                raise InputValidationError(
+                    f"J-Quants更新 '{dataset_id}' の予定日がprofileの監査可能期間外です。"
+                )
+        if update.get("publication_week_calendar") is not None:
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' のpublication_week_calendarは廃止済みです。共有カレンダーを使ってください。"
+            )
+        update_checked_at = _parse_jst(
+            update.get("update_checked_at_jst"),
+            f"J-Quants更新 '{dataset_id}' の update_checked_at_jst",
+        )
+        if update_checked_at > as_of_jst:
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' の確認時刻が分析時刻より未来です。")
+        if (as_of_jst - update_checked_at).total_seconds() > COVERAGE_CHECK_MAX_AGE_HOURS * 3600:
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' の確認時刻が24時間より古いです。")
+        availability_status = update.get("availability_status")
+        if availability_status not in ("updated", "awaiting_scheduled_update", "delayed", "unavailable"):
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' の availability_status が不正です。")
+        is_latest_available = update.get("is_latest_available")
+        if not isinstance(is_latest_available, bool):
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' の is_latest_available は真偽値にしてください。")
+        expected_reference = _parse_iso_date(
+            update.get("expected_latest_reference_date"),
+            f"J-Quants更新 '{dataset_id}' の expected_latest_reference_date",
+        )
+        if latest_reference > as_of_jst.date() or expected_reference > as_of_jst.date():
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' の対象日を分析日より未来にできません。")
+        if expected_reference != derived_expected_reference:
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' のexpected_latest_reference_dateを公式公表予定・共有カレンダー由来の対象日へ一致させてください。"
+            )
+        source_data_as_of = _parse_jst(
+            source["data_as_of_jst"],
+            f"J-Quants台帳 '{source_id}' の data_as_of_jst",
+        )
+        if latest_published_at != source_data_as_of:
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' の最新公表時刻をsource_registry.data_as_of_jstと一致させてください。"
+            )
+        if latest_published_at > update_checked_at:
+            raise InputValidationError(
+                f"J-Quants更新 '{dataset_id}' の最新公表時刻を確認時刻より後にできません。"
+            )
+        if expected_frequency == "weekly" and strict_weekly_current_source:
+            reference_release_at = weekly_reference_release_map.get(latest_reference)
+            if reference_release_at is None:
+                raise InputValidationError(
+                    f"J-Quants週次更新 '{dataset_id}' の最新取得対象日を公式予定対象日へ結び付けてください。"
+                )
+            if reference_release_at.date() > latest_published_at.date():
+                raise InputValidationError(
+                    f"J-Quants週次更新 '{dataset_id}' の最新取得対象日に対応する公式公表日が実際の最新公表日より後です。"
+                )
+            if availability_status != weekly_expected_availability_status:
+                raise InputValidationError(
+                    f"J-Quants週次更新 '{dataset_id}' のavailability_statusを実到着対象日と到来済み・次回公式予定から導出した{weekly_expected_availability_status}へ一致させてください。"
+                )
+        if (
+            expected_frequency == "daily"
+            and early_arrival_observed
+            and availability_status != "awaiting_scheduled_update"
+        ):
+            raise InputValidationError(
+                f"J-Quants日次更新 '{dataset_id}' の同日早着後は次の現物営業日を待つawaiting_scheduled_updateにしてください。"
+            )
+        if availability_status == "updated" and (
+            (
+                (
+                    expected_update > as_of_jst
+                    or update_checked_at < expected_update
+                )
+                and not (
+                    expected_frequency == "weekly"
+                    and early_arrival_observed
+                    and next_scheduled_update is None
+                )
+            )
+            or not is_latest_available
+            or latest_reference != expected_reference
+        ):
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' のupdated状態と公表予定・対象日が矛盾します。")
+        if availability_status == "awaiting_scheduled_update" and expected_update <= as_of_jst:
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' は公表予定後にawaitingを指定できません。")
+        if availability_status == "delayed" and expected_update > as_of_jst:
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' は公表予定前にdelayedを指定できません。")
+        if availability_status == "delayed" and update_checked_at < expected_update:
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' は公表予定後に確認してからdelayedとしてください。")
+        if is_latest_available != (latest_reference == expected_reference):
+            raise InputValidationError(f"J-Quants更新 '{dataset_id}' のis_latest_availableと対象日が矛盾します。")
+        jquants_updates.append(
+            {
+                "dataset_id": dataset_id,
+                "source_id": source_id,
+                "schedule_profile_id": schedule_profile_id,
+                "frequency": frequency,
+                "official_update_time_description": _required_text(
+                    update.get("official_update_time_description"),
+                    f"J-Quants更新 '{dataset_id}' の official_update_time_description",
+                ),
+                "latest_expected_update_jst": _format_jst(expected_update),
+                "update_checked_at_jst": _format_jst(update_checked_at),
+                "latest_available_published_at_jst": _format_jst(latest_published_at),
+                "latest_available_reference_date": latest_reference.isoformat(),
+                "expected_latest_reference_date": expected_reference.isoformat(),
+                "availability_status": availability_status,
+                "is_latest_available": is_latest_available,
+                "publication_schedule_source_id": _required_text(
+                    update.get("publication_schedule_source_id"),
+                    f"J-Quants更新 '{dataset_id}' の publication_schedule_source_id",
+                ),
+                "official_schedule_complete": official_schedule_complete,
+                "official_schedule_window_start_date": official_schedule_window_start_date,
+                "official_schedule_window_end_date": official_schedule_window_end_date,
+                "official_publication_schedule": official_publication_schedule,
+                "last_due_update_jst": (
+                    _format_jst(last_due_update)
+                    if last_due_update is not None
+                    else None
+                ),
+                "last_due_reference_date": (
+                    last_due_reference.isoformat()
+                    if last_due_reference is not None
+                    else None
+                ),
+                "next_scheduled_update_jst": (
+                    _format_jst(next_scheduled_update)
+                    if next_scheduled_update is not None
+                    else None
+                ),
+                "next_scheduled_reference_date": (
+                    next_scheduled_reference.isoformat()
+                    if next_scheduled_reference is not None
+                    else None
+                ),
+                "early_arrival_observed": early_arrival_observed,
+                "observed_schedule_update_jst": (
+                    _format_jst(observed_schedule_update)
+                    if observed_schedule_update is not None
+                    else None
+                ),
+                "observed_schedule_reference_date": (
+                    observed_schedule_reference.isoformat()
+                    if observed_schedule_reference is not None
+                    else None
+                ),
+            }
+        )
+
+    dataset_global_contracts: dict[str, dict[str, Any]] = {}
+    for row in jquants_updates:
+        dataset_key = row["dataset_id"].casefold()
+        dataset_contract = {
+            "schedule_profile_id": row["schedule_profile_id"],
+            "frequency": row["frequency"],
+            "publication_schedule_source_id": row[
+                "publication_schedule_source_id"
+            ],
+            "official_schedule_window_start_date": row[
+                "official_schedule_window_start_date"
+            ],
+            "official_schedule_window_end_date": row[
+                "official_schedule_window_end_date"
+            ],
+            "official_publication_schedule": row[
+                "official_publication_schedule"
+            ],
+        }
+        existing_contract = dataset_global_contracts.get(dataset_key)
+        if existing_contract is not None and dataset_contract != existing_contract:
+            raise InputValidationError(
+                f"J-Quants dataset '{row['dataset_id']}' の複数sourceでdataset-global公式契約が一致していません。"
+            )
+        dataset_global_contracts[dataset_key] = dataset_contract
+
+    if registered_jquants_source_ids:
+        normalized_weekly_calendar_ends = [
+            _parse_iso_date(
+                row["official_schedule_window_end_date"],
+                f"J-Quants週次更新 '{row['dataset_id']}' の正規化済み公式予定終端",
+            )
+            for row in jquants_updates
+            if row["frequency"] == "weekly"
+        ]
+        expected_shared_calendar_end = max(
+            [publication_calendar_base_end, *normalized_weekly_calendar_ends]
+        )
+        actual_shared_calendar_end = date.fromisoformat(
+            publication_calendar[-1]["date"]
+        )
+        if actual_shared_calendar_end != expected_shared_calendar_end:
+            raise InputValidationError(
+                "jquants_publication_calendar終端を全週次datasetの公式予定終端の最大日へ一致させてください。"
+            )
+
+    selected_jquants_sources = {
+        row["selected_source_id"]
+        for row in selections
+        if row["purpose"] == "scheduled_history"
+    }
+    candidate_jquants_sources = {
+        source_id
+        for row in selections
+        if row["purpose"] == "scheduled_history"
+        for source_id in row["candidate_source_ids"]
+        if registry[source_id]["provider_family"] == "jquants"
+    }
+    registered_jquants_sources = {
+        source_id
+        for source_id, row in registry.items()
+        if row["provider_family"] == "jquants"
+    }
+    audited_jquants_sources = {row["source_id"] for row in jquants_updates}
+    update_required_jquants_sources = {
+        source_id
+        for source_id in candidate_jquants_sources
+        if registry[source_id]["status"] in ("valid", "stale", "invalid")
+    }
+    if (
+        registered_jquants_sources != candidate_jquants_sources
+        or update_required_jquants_sources != audited_jquants_sources
+    ):
+        missing_updates = sorted(update_required_jquants_sources - audited_jquants_sources)
+        orphan_registry = sorted(registered_jquants_sources - candidate_jquants_sources)
+        unregistered_updates = sorted(audited_jquants_sources - update_required_jquants_sources)
+        raise InputValidationError(
+            "J-Quantsのregistry・scheduled_history候補・データ保有候補のdataset更新監査をsource_id単位で一致させてください。"
+            f" 更新欠落={missing_updates}、候補外registry={orphan_registry}、候補外更新={unregistered_updates}"
+        )
+    updates_by_source = {row["source_id"]: row for row in jquants_updates}
+    unusable_selected_sources = [
+        source_id
+        for source_id in sorted(selected_jquants_sources)
+        if (
+            updates_by_source[source_id]["availability_status"]
+            in ("updated", "awaiting_scheduled_update")
+            and not updates_by_source[source_id]["is_latest_available"]
+        )
+        or updates_by_source[source_id]["availability_status"] == "unavailable"
+        or (
+            updates_by_source[source_id]["availability_status"] == "delayed"
+            and updates_by_source[source_id]["is_latest_available"]
+        )
+    ]
+    if unusable_selected_sources:
+        raise InputValidationError(
+            "J-Quantsのselected scheduled_historyは最新到着済み、更新待ち、または監査済み遅延状態に限ります: "
+            + ", ".join(unusable_selected_sources)
+        )
+
+    return {
+        "provider_priority": [
+            {"provider_family": provider, "tier": tier}
+            for provider, tier in sorted(MARKET_DATA_PROVIDER_PRIORITY.items(), key=lambda item: item[1])
+        ],
+        "priority_scope": "同一series_keyの価格観測。公式仕様・カレンダーの権威順位には適用しない。",
+        "execution_anchor_rule": "現在板・現在NT・枚数はKabusの有効な両側気配だけをアンカーにする。",
+        "source_registry": registry,
+        "source_selection_audit": selections,
+        "jquants_publication_calendar_source_id": publication_calendar_source_id,
+        "jquants_publication_calendar_checked_at_jst": (
+            _format_jst(publication_calendar_checked_at)
+            if publication_calendar_checked_at is not None
+            else None
+        ),
+        "jquants_publication_calendar": publication_calendar,
+        "jquants_dataset_updates": jquants_updates,
+        "execution_anchor_valid_until_jst": _format_jst(min(anchor_expiries)),
+    }
 
 
 # ----------------------------------------
@@ -1408,6 +3119,7 @@ def _validate_calibration(
         "calibration_version",
         "method",
         "horizon_definition",
+        "session_path_definition_id",
         "base_method",
         "model_id",
         "model_structure_id",
@@ -1424,6 +3136,18 @@ def _validate_calibration(
     if required_text["horizon_definition"] != "forecast_valid_until_midpoint_direction":
         raise InputValidationError(
             "calibration.horizon_definition は forecast_valid_until_midpoint_direction にしてください。"
+        )
+    if required_text["session_path_definition_id"] != "current_continuous_session_no_recess_crossing_v1":
+        raise InputValidationError(
+            "calibration.session_path_definition_id は current_continuous_session_no_recess_crossing_v1 にしてください。"
+        )
+    supported_origin_sessions = _normalized_identifier_list(
+        spec.get("supported_origin_sessions"),
+        "calibration.supported_origin_sessions",
+    )
+    if any(value not in FUTURES_SESSION_KINDS for value in supported_origin_sessions):
+        raise InputValidationError(
+            "calibration.supported_origin_sessions はday_session/night_sessionだけにしてください。"
         )
     if required_text["base_method"] != expected_base_method:
         raise InputValidationError("calibration.base_method を現在の probability.base と一致させてください。")
@@ -1573,6 +3297,8 @@ def _validate_calibration(
         "trained_through": trained_through.isoformat() if trained_through else None,
         "effective_sample_count": effective_sample_count,
         "horizon_seconds": horizon_seconds,
+        "supported_origin_sessions": supported_origin_sessions,
+        "session_path_definition_id": required_text["session_path_definition_id"],
         **required_text,
         "validation_passed": True,
         "quadrant_observation_counts": quadrant_counts,
@@ -1920,6 +3646,8 @@ def calculate_timing(
     spec: Mapping[str, Any],
     as_of_jst: datetime,
     search_end_jst: datetime | None = None,
+    session_context: Mapping[str, Any] | None = None,
+    execution_anchor_valid_until_jst: datetime | None = None,
 ) -> dict[str, Any]:
     """
     機能:
@@ -1929,6 +3657,8 @@ def calculate_timing(
         spec (Mapping[str, Any]): 板時刻、TTL、セッション終了、再推定時刻、イベント候補。
         as_of_jst (datetime): 分析基準の日本時間。
         search_end_jst (datetime | None): 次の変動候補を探す上限。通常はD5終了時刻。
+        session_context (Mapping[str, Any] | None): 検証済みの先物セッション情報。
+        execution_anchor_valid_until_jst (datetime | None): Kabus板sourceの絶対鮮度期限。
 
     返り値:
         dict[str, Any]: 3種類の時刻、採用イベント、保留状態。
@@ -1936,10 +3666,18 @@ def calculate_timing(
     board_snapshot = _parse_jst(spec.get("board_snapshot_jst"), "timing.board_snapshot_jst")
     if board_snapshot > as_of_jst:
         raise InputValidationError("timing.board_snapshot_jst が分析時刻より未来です。")
+    if session_context is None:
+        session_context = validate_session_context(spec, as_of_jst)
+    session_start = _parse_jst(session_context["session_start_jst"], "timing.session_start_jst")
+    continuous_end = _parse_jst(session_context["continuous_end_jst"], "timing.continuous_end_jst")
+    session_end = _parse_jst(session_context["session_end_jst"], "timing.session_end_jst")
+    if not session_start <= board_snapshot < continuous_end:
+        raise InputValidationError("timing.board_snapshot_jst を現在先物セッションのザラバ時間内にしてください。")
+    if not session_context["entry_phase_valid"]:
+        raise InputValidationError("プレクロージング中の板を通常の新規入口アンカーにできません。")
     board_ttl_minutes = _finite_float(spec.get("board_ttl_minutes", 30), "timing.board_ttl_minutes")
     if board_ttl_minutes <= 0.0 or board_ttl_minutes > 30.0:
         raise InputValidationError("timing.board_ttl_minutes は0超30分以下にしてください。")
-    session_end = _parse_jst(spec.get("session_end_jst"), "timing.session_end_jst")
     if session_end <= board_snapshot:
         raise InputValidationError("timing.session_end_jst は板スナップショットより後にしてください。")
     provider_expires_raw = spec.get("provider_expires_jst")
@@ -1951,9 +3689,11 @@ def calculate_timing(
     model_refresh = _parse_jst(spec.get("model_refresh_jst"), "timing.model_refresh_jst")
     if model_refresh <= as_of_jst:
         raise InputValidationError("timing.model_refresh_jst は分析時刻より後にしてください。")
-    board_deadlines = [board_snapshot + timedelta(minutes=board_ttl_minutes), session_end]
+    board_deadlines = [board_snapshot + timedelta(minutes=board_ttl_minutes), continuous_end]
     if provider_expires is not None:
         board_deadlines.append(provider_expires)
+    if execution_anchor_valid_until_jst is not None:
+        board_deadlines.append(execution_anchor_valid_until_jst)
     board_valid_until = min(board_deadlines)
 
     threshold = _bounded_float(spec.get("materiality_threshold", 0.35), "timing.materiality_threshold", 0.0, 1.0)
@@ -2135,12 +3875,12 @@ def calculate_timing(
     ]
     material_events.sort(key=lambda row: (row["window_start"], -row["materiality_score"], row["event_id"]))
     next_event = material_events[0] if material_events else None
-    forecast_valid_until = model_refresh
+    forecast_valid_until = min(model_refresh, continuous_end)
     board_entry_status = "valid" if board_valid_until > as_of_jst else "expired"
     hold_reasons: list[str] = []
     if board_entry_status == "expired":
         hold_reasons.append("入口板の有効期限切れ")
-    deadline_reasons = ["モデル再推定時刻"]
+    deadline_reasons = ["モデル再推定時刻"] if model_refresh <= continuous_end else ["現在先物セッションのザラバ終了"]
     if search_end_jst is not None and search_end_jst < forecast_valid_until:
         forecast_valid_until = search_end_jst
         deadline_reasons = ["D5イベント探索上限"]
@@ -2195,8 +3935,28 @@ def calculate_timing(
     return {
         "status": "hold" if hold_reasons else "ok",
         "hold_reasons": hold_reasons,
+        "cash_market_state": session_context["cash_market_state"],
+        "futures_session_kind": session_context["futures_session_kind"],
+        "futures_session_phase": session_context["futures_session_phase"],
+        "exchange_trading_day": session_context["exchange_trading_day"],
+        "holiday_division": session_context["holiday_division"],
+        "cash_market_holiday_division": session_context["cash_market_holiday_division"],
+        "is_derivatives_holiday_trading": session_context["is_derivatives_holiday_trading"],
+        "session_calendar": session_context["session_calendar"],
+        "session_start_jst": session_context["session_start_jst"],
+        "continuous_end_jst": session_context["continuous_end_jst"],
+        "session_end_jst": session_context["session_end_jst"],
+        "next_session_start_jst": session_context["next_session_start_jst"],
+        "session_schedule_source_id": session_context["session_schedule_source_id"],
+        "session_schedule_source_url": session_context["session_schedule_source_url"],
+        "session_checked_at_jst": session_context["session_checked_at_jst"],
         "board_entry_status": board_entry_status,
         "board_entry_valid_until_jst": _format_jst(board_valid_until),
+        "execution_anchor_valid_until_jst": (
+            _format_jst(execution_anchor_valid_until_jst)
+            if execution_anchor_valid_until_jst is not None
+            else None
+        ),
         "provider_expires_jst": _format_jst(provider_expires) if provider_expires is not None else None,
         "forecast_valid_until_jst": _format_jst(forecast_valid_until),
         "model_refresh_jst": _format_jst(model_refresh),
@@ -2373,7 +4133,12 @@ def calculate_nt(
         dict[str, Any]: 中値換算、執行側換算、候補枚数、残余監査。
     """
     identifiers: dict[str, str] = {}
-    for field_name in ("nikkei_symbol", "topix_symbol"):
+    for field_name in (
+        "nikkei_symbol",
+        "topix_symbol",
+        "nikkei_board_source_id",
+        "topix_board_source_id",
+    ):
         field_value = spec.get(field_name)
         if not isinstance(field_value, str) or not field_value.strip():
             raise InputValidationError(f"nt.{field_name} は非空文字列にしてください。")
@@ -3007,6 +4772,7 @@ def _daily_index_path(
 def calculate_daily_forecast(
     spec: Mapping[str, Any],
     as_of_jst: datetime,
+    session_context: Mapping[str, Any],
 ) -> dict[str, Any]:
     """
     機能:
@@ -3015,12 +4781,30 @@ def calculate_daily_forecast(
     引数:
         spec (Mapping[str, Any]): アンカー、呼値、営業日、日別ドリフト・分散。
         as_of_jst (datetime): 将来日とカレンダー取得時刻の検証基準。
+        session_context (Mapping[str, Any]): D1起算に使う検証済みJPX取引日。
 
     返り値:
         dict[str, Any]: 日経・TOPIXそれぞれの5営業日予測表。
     """
     if spec.get("calendar_verified") is not True:
         raise InputValidationError("daily_forecast.calendar_verified は true にしてください。")
+    target_definition_id = _required_text(
+        spec.get("target_definition_id"),
+        "daily_forecast.target_definition_id",
+    )
+    if target_definition_id != "tse_cash_close_15_30":
+        raise InputValidationError("daily_forecast.target_definition_id は tse_cash_close_15_30 にしてください。")
+    target_venue = _required_text(spec.get("target_venue"), "daily_forecast.target_venue")
+    if target_venue != "JPX_TSE":
+        raise InputValidationError("daily_forecast.target_venue は JPX_TSE にしてください。")
+    target_phase = _required_text(spec.get("target_phase"), "daily_forecast.target_phase")
+    if target_phase != "cash_close":
+        raise InputValidationError("daily_forecast.target_phase は cash_close にしてください。")
+    d1_origin_rule = _required_text(spec.get("d1_origin_rule"), "daily_forecast.d1_origin_rule")
+    if d1_origin_rule != "day_next_cash_trading_day_or_night_exchange_trading_day":
+        raise InputValidationError(
+            "daily_forecast.d1_origin_rule は day_next_cash_trading_day_or_night_exchange_trading_day にしてください。"
+        )
     drift_model_provenance = _validated_model_provenance(
         _require_mapping(
             spec.get("drift_model_provenance"),
@@ -3079,13 +4863,16 @@ def calculate_daily_forecast(
         spec.get("calendar_sessions"),
         "daily_forecast.calendar_sessions",
     )
-    first_calendar_date = as_of_jst.date() + timedelta(days=1)
+    first_calendar_date = _parse_iso_date(
+        session_context.get("calendar_start_date"),
+        "session_context.calendar_start_date",
+    )
     final_calendar_date = verified_dates[-1]
     expected_calendar_length = (final_calendar_date - first_calendar_date).days + 1
     if expected_calendar_length < 5 or expected_calendar_length > 15:
-        raise InputValidationError("D1〜D5は分析翌日から15暦日以内の次の5営業日にしてください。")
+        raise InputValidationError("D1〜D5はセッション基準日から15暦日以内の次の5現物営業日にしてください。")
     if len(calendar_sessions_raw) != expected_calendar_length:
-        raise InputValidationError("calendar_sessions は分析翌日からD5までの全暦日を省略せず指定してください。")
+        raise InputValidationError("calendar_sessions はセッション基準日からD5までの全暦日を省略せず指定してください。")
     calendar_sessions: list[dict[str, Any]] = []
     derived_trading_dates: list[date] = []
     for session_index, raw_session in enumerate(calendar_sessions_raw):
@@ -3103,20 +4890,54 @@ def calculate_daily_forecast(
             ) from exc
         expected_session_date = first_calendar_date + timedelta(days=session_index)
         if session_date != expected_session_date:
-            raise InputValidationError("calendar_sessions の日付を分析翌日からD5まで連続させてください。")
-        is_trading_day = session.get("is_trading_day")
-        if not isinstance(is_trading_day, bool):
+            raise InputValidationError("calendar_sessions の日付をセッション基準日からD5まで連続させてください。")
+        cash_is_trading_day = session.get("cash_is_trading_day")
+        if not isinstance(cash_is_trading_day, bool):
             raise InputValidationError(
-                f"daily_forecast.calendar_sessions[{session_index}].is_trading_day は真偽値にしてください。"
+                f"daily_forecast.calendar_sessions[{session_index}].cash_is_trading_day は真偽値にしてください。"
             )
-        if session_date.weekday() >= 5 and is_trading_day:
-            raise InputValidationError("calendar_sessions の土日を取引日として指定できません。")
-        if is_trading_day:
+        derivatives_session_open = session.get("derivatives_session_open")
+        if not isinstance(derivatives_session_open, bool):
+            raise InputValidationError(
+                f"daily_forecast.calendar_sessions[{session_index}].derivatives_session_open は真偽値にしてください。"
+            )
+        holiday_division = str(session.get("holiday_division", "")).strip()
+        if holiday_division not in HOLIDAY_DIVISIONS:
+            raise InputValidationError(
+                f"daily_forecast.calendar_sessions[{session_index}].holiday_division が不正です。"
+            )
+        if cash_is_trading_day != (holiday_division in ("1", "2")):
+            raise InputValidationError(
+                "calendar_sessionsのcash_is_trading_dayをholiday_division=1または2と一致させてください。"
+            )
+        if holiday_division == "2":
+            raise InputValidationError(
+                "東証半日立会日は15:30終値targetの対象外です。半日用target profileを追加してから使用してください。"
+            )
+        if derivatives_session_open != (holiday_division in ("1", "3")):
+            raise InputValidationError(
+                "calendar_sessionsのderivatives_session_openをholiday_division=1または3と一致させてください。"
+            )
+        origin_must_be_cash_trading_day = session_index == 0 and (
+            session_context["futures_session_kind"] == "night_session"
+            or session_context["holiday_division"] == "3"
+        )
+        if origin_must_be_cash_trading_day and not cash_is_trading_day:
+            raise InputValidationError(
+                "ナイト・祝日日中のcalendar_sessions先頭はexchange_trading_dayの現物営業日にしてください。"
+            )
+        if session_date.weekday() >= 5 and (
+            cash_is_trading_day or derivatives_session_open or holiday_division != "0"
+        ):
+            raise InputValidationError("calendar_sessions の土日を現物・先物取引日として指定できません。")
+        if cash_is_trading_day:
             derived_trading_dates.append(session_date)
         calendar_sessions.append(
             {
                 "date": session_date.isoformat(),
-                "is_trading_day": is_trading_day,
+                "cash_is_trading_day": cash_is_trading_day,
+                "derivatives_session_open": derivatives_session_open,
+                "holiday_division": holiday_division,
             }
         )
     if derived_trading_dates != verified_dates:
@@ -3141,6 +4962,8 @@ def calculate_daily_forecast(
             raise InputValidationError("D1〜D5は日付単位で厳密な昇順にしてください。")
         if target.date() != verified_dates[index - 1]:
             raise InputValidationError(f"{expected_label}の対象日を検証済み営業日と一致させてください。")
+        if (target.hour, target.minute, target.second, target.microsecond) != (15, 30, 0, 0):
+            raise InputValidationError(f"{expected_label} target_at_jst はTSE現物終値15:30 JSTにしてください。")
         major_events_raw = _require_sequence(day.get("major_events"), f"daily_forecast {expected_label} major_events")
         major_events: list[str] = []
         seen_major_events: set[str] = set()
@@ -3170,6 +4993,13 @@ def calculate_daily_forecast(
         raise InputValidationError("daily_forecast.topix_tick はTOPIX miniの0.25にしてください。")
     return {
         "definition": "収束予想中心値は条件付き分布の中央値。確定値ではない。",
+        "target_definition_id": target_definition_id,
+        "target_venue": target_venue,
+        "target_phase": target_phase,
+        "d1_origin_rule": d1_origin_rule,
+        "calendar_origin_date": first_calendar_date.isoformat(),
+        "origin_futures_session_kind": session_context["futures_session_kind"],
+        "origin_exchange_trading_day": session_context["exchange_trading_day"],
         "calendar_source": calendar_source,
         "calendar_coverage_item": calendar_coverage_item,
         "calendar_source_id": calendar_source_id.strip(),
@@ -3696,16 +5526,48 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise InputValidationError(
             "実入力に配布サンプルの合成マーカーが残っています: " + ", ".join(sample_markers)
         )
+    timing_spec = _require_mapping(payload.get("timing"), "timing")
+    session_context = validate_session_context(timing_spec, as_of_jst)
+    nt_spec = _require_mapping(payload.get("nt"), "nt")
+    market_data_freshness = validate_market_data_freshness(
+        _require_mapping(payload.get("market_data_freshness"), "market_data_freshness"),
+        nt_spec,
+        session_context,
+        as_of_jst,
+    )
     daily_spec = _require_mapping(payload.get("daily_forecast"), "daily_forecast")
-    daily_forecast = calculate_daily_forecast(daily_spec, as_of_jst)
+    daily_forecast = calculate_daily_forecast(daily_spec, as_of_jst, session_context)
+    publication_calendar_by_date = {
+        row["date"]: row
+        for row in market_data_freshness["jquants_publication_calendar"]
+    }
+    for daily_calendar_row in daily_forecast["calendar_sessions"]:
+        publication_calendar_row = publication_calendar_by_date.get(daily_calendar_row["date"])
+        if publication_calendar_row is not None and (
+            publication_calendar_row["cash_is_trading_day"]
+            != daily_calendar_row["cash_is_trading_day"]
+            or publication_calendar_row["holiday_division"]
+            != daily_calendar_row["holiday_division"]
+        ):
+            raise InputValidationError(
+                "J-Quants公表営業日カレンダーをdaily_forecast.calendar_sessionsと一致させてください。"
+            )
     daily_days = _require_sequence(daily_spec.get("days"), "daily_forecast.days")
     d5_input = _require_mapping(daily_days[-1], "daily_forecast.days[4]")
     d5_end_jst = _parse_jst(
         d5_input.get("target_at_jst"),
         "daily_forecast D5 target_at_jst",
     )
-    timing_spec = _require_mapping(payload.get("timing"), "timing")
-    timing = calculate_timing(timing_spec, as_of_jst, d5_end_jst)
+    timing = calculate_timing(
+        timing_spec,
+        as_of_jst,
+        d5_end_jst,
+        session_context,
+        _parse_jst(
+            market_data_freshness["execution_anchor_valid_until_jst"],
+            "market_data_freshness.execution_anchor_valid_until_jst",
+        ),
+    )
     if timing["board_entry_status"] != "valid":
         raise InputValidationError("入口板が失効しています。両脚板を再取得してから再計算してください。")
     forecast_horizon = _parse_jst(timing["forecast_valid_until_jst"], "timing.forecast_valid_until_jst")
@@ -3715,7 +5577,40 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
         _require_mapping(payload.get("calibration", {}), "calibration"),
         forecast_horizon,
     )
-    nt = calculate_nt(_require_mapping(payload.get("nt"), "nt"), probability, as_of_jst)
+    current_session_kind = str(session_context["futures_session_kind"])
+    session_sensitive_provenance: list[tuple[str, Mapping[str, Any]]] = [
+        ("4象限baseモデル", probability["base_provenance"]),
+        ("NT相対価値モデル", probability["relative_value"]["model_provenance"]),
+        ("D1〜D5方向ドリフトモデル", daily_forecast["drift_model_provenance"]),
+    ]
+    session_sensitive_provenance.extend(
+        (
+            f"シナリオ '{row['scenario_id']}' の条件付き4象限モデル",
+            row["conditional_probability_basis"],
+        )
+        for row in probability["base_scenario_audit"]
+    )
+    for provenance_name, provenance in session_sensitive_provenance:
+        if current_session_kind not in provenance["supported_origin_sessions"]:
+            raise InputValidationError(
+                f"{provenance_name} は現在の{current_session_kind}を検証済み対象に含めていません。"
+            )
+    calibration_result = probability["calibration"]
+    if (
+        calibration_result["status"] == "walk_forward"
+        and current_session_kind not in calibration_result["supported_origin_sessions"]
+    ):
+        raise InputValidationError("ウォークフォワード校正が現在の先物セッションを対象にしていません。")
+    if calibration_result["status"] == "walk_forward" and (
+        calibration_result["supported_origin_sessions"]
+        != probability["base_provenance"]["supported_origin_sessions"]
+        or calibration_result["session_path_definition_id"]
+        != probability["base_provenance"]["session_path_definition_id"]
+    ):
+        raise InputValidationError(
+            "calibrationの対応セッションとsession pathを現在のbase_provenanceへ完全一致させてください。"
+        )
+    nt = calculate_nt(nt_spec, probability, as_of_jst)
     last_trading_session_end = _parse_jst(
         nt["last_trading_session_end_jst"],
         "nt.last_trading_session_end_jst",
@@ -3741,6 +5636,144 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
         _require_mapping(payload.get("other_sources"), "other_sources"),
         as_of_jst,
     )
+    session_source_id = timing["session_schedule_source_id"]
+    session_source = other_sources.get(session_source_id)
+    if session_source is None:
+        raise InputValidationError("timing.session_schedule_source_id をother_sourcesへ登録してください。")
+    if session_source["source_url_or_document_id"] != timing["session_schedule_source_url"]:
+        raise InputValidationError("先物セッション予定のURLをother_sources登録値と一致させてください。")
+    _validate_source_link(
+        "other",
+        session_source_id,
+        timing["session_checked_at_jst"],
+        {},
+        other_sources,
+        as_of_jst,
+        "先物セッション予定",
+    )
+    selected_market_sources = {
+        row["selected_source_id"]
+        for row in market_data_freshness["source_selection_audit"]
+        if row["purpose"] in ("execution_anchor", "current_price_context")
+    }
+    candidate_market_sources = {
+        source_id
+        for row in market_data_freshness["source_selection_audit"]
+        if row["purpose"] in ("execution_anchor", "current_price_context")
+        for source_id in row["candidate_source_ids"]
+    }
+    for coverage_item in PRICE_COVERAGE_ITEMS:
+        coverage_row = coverage_items[coverage_item]
+        if coverage_row["status"] not in ("used", "excluded"):
+            continue
+        coverage_data_as_of = _parse_jst(
+            coverage_row["data_as_of_jst"],
+            f"coverage.{coverage_item}.data_as_of_jst",
+        )
+        registry_observation_times: list[datetime] = []
+        for source_id in coverage_row["source_ids"]:
+            registry_row = market_data_freshness["source_registry"].get(source_id)
+            if registry_row is None or source_id not in candidate_market_sources:
+                raise InputValidationError(
+                    f"coverage.{coverage_item} の価格source '{source_id}' をmarket_data_freshnessの候補へ登録してください。"
+                )
+            if coverage_item not in registry_row["coverage_items"]:
+                raise InputValidationError(
+                    f"coverage.{coverage_item} のsource '{source_id}' をsource_registry.coverage_itemsへ結び付けてください。"
+                )
+            if coverage_row["status"] == "used" and (
+                registry_row["status"] != "valid" or source_id not in selected_market_sources
+            ):
+                raise InputValidationError(
+                    f"coverage.{coverage_item} の利用source '{source_id}' はvalidな選択済み価格sourceにしてください。"
+                )
+            registry_data_as_of = _parse_jst(
+                registry_row["data_as_of_jst"],
+                f"価格source '{source_id}' data_as_of_jst",
+            )
+            registry_observation_times.append(registry_data_as_of)
+        if registry_observation_times and coverage_data_as_of != max(registry_observation_times):
+            raise InputValidationError(
+                f"coverage.{coverage_item}.data_as_of_jstを全sourceの最新観測時刻と一致させてください。"
+            )
+    for update_row in market_data_freshness["jquants_dataset_updates"]:
+        publication_source_id = update_row["publication_schedule_source_id"]
+        if publication_source_id not in other_sources:
+            raise InputValidationError(
+                f"J-Quants更新 '{update_row['dataset_id']}' のpublication_schedule_source_idをother_sourcesへ登録してください。"
+            )
+        _validate_source_link(
+            "other",
+            publication_source_id,
+            update_row["update_checked_at_jst"],
+            {},
+            other_sources,
+            as_of_jst,
+            f"J-Quants更新 '{update_row['dataset_id']}' の公表予定",
+        )
+    publication_calendar_source_id = market_data_freshness[
+        "jquants_publication_calendar_source_id"
+    ]
+    if publication_calendar_source_id is not None:
+        if publication_calendar_source_id not in other_sources:
+            raise InputValidationError(
+                "jquants_publication_calendar_source_idをother_sourcesへ登録してください。"
+            )
+        _validate_source_link(
+            "other",
+            publication_calendar_source_id,
+            market_data_freshness["jquants_publication_calendar_checked_at_jst"],
+            {},
+            other_sources,
+            as_of_jst,
+            "J-Quants公表営業日カレンダー",
+        )
+    if coverage_items["jquants"]["status"] == "used":
+        calendar_jquants_source_id = (
+            daily_forecast["calendar_source_id"]
+            if daily_forecast["calendar_coverage_item"] == "jquants"
+            else None
+        )
+        selected_jquants_sources = {
+            row["selected_source_id"]
+            for row in market_data_freshness["source_selection_audit"]
+            if row["purpose"] == "scheduled_history"
+        }
+        auditable_jquants_sources = {
+            row["source_id"]
+            for row in market_data_freshness["jquants_dataset_updates"]
+            if (
+                row["availability_status"] in ("updated", "awaiting_scheduled_update")
+                and row["is_latest_available"]
+            )
+            or (
+                row["availability_status"] == "delayed"
+                and not row["is_latest_available"]
+            )
+        }
+        invalid_jquants_sources: list[str] = []
+        for source_id in coverage_items["jquants"]["source_ids"]:
+            if source_id == calendar_jquants_source_id:
+                if source_id in market_data_freshness["source_registry"]:
+                    invalid_jquants_sources.append(f"{source_id}(取引カレンダーと定時履歴を混同)")
+                continue
+            registry_row = market_data_freshness["source_registry"].get(source_id)
+            if (
+                registry_row is None
+                or registry_row["provider_family"] != "jquants"
+                or registry_row["data_role"] != "scheduled_history"
+                or "jquants" not in registry_row["coverage_items"]
+                or registry_row["status"] != "valid"
+                or source_id not in selected_jquants_sources
+                or source_id not in auditable_jquants_sources
+            ):
+                invalid_jquants_sources.append(source_id)
+                continue
+        if invalid_jquants_sources:
+            raise InputValidationError(
+                "coverage.jquantsでusedとした定時履歴sourceをvalid台帳・選択・最新更新監査へ結合できません: "
+                + ", ".join(invalid_jquants_sources)
+            )
     material_events_in_search_horizon = [
         row
         for row in timing["events"]
@@ -3857,6 +5890,7 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
             )
 
     consumed_coverage_sources: set[tuple[str, str]] = set()
+    consumed_coverage_source_times: dict[tuple[str, str], set[str]] = {}
     for event_row in timing["events"]:
         coverage_item = event_row["coverage_item"]
         _validate_source_link(
@@ -3875,7 +5909,9 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
                     f"イベント '{event_row['event_id']}' の原典を other_sources.{event_row['source_id']} と一致させてください。"
                 )
         if coverage_item != "other":
-            consumed_coverage_sources.add((coverage_item, event_row["source_id"]))
+            consumed_key = (coverage_item, event_row["source_id"])
+            consumed_coverage_sources.add(consumed_key)
+            consumed_coverage_source_times.setdefault(consumed_key, set()).add(event_row["checked_at_jst"])
     for evidence_row in probability["evidence_audit"]:
         coverage_item = evidence_row["coverage_item"]
         _validate_source_link(
@@ -3888,7 +5924,9 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
             f"証拠 '{evidence_row['evidence_key']}'",
         )
         if coverage_item != "other" and evidence_row["effective_multiplier"] >= 1e-6:
-            consumed_coverage_sources.add((coverage_item, evidence_row["source_id"]))
+            consumed_key = (coverage_item, evidence_row["source_id"])
+            consumed_coverage_sources.add(consumed_key)
+            consumed_coverage_source_times.setdefault(consumed_key, set()).add(evidence_row["observed_at_jst"])
     for scenario_row in probability["base_scenario_audit"]:
         coverage_item = scenario_row["coverage_item"]
         _validate_source_link(
@@ -3901,7 +5939,9 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
             f"シナリオ '{scenario_row['scenario_id']}'",
         )
         if coverage_item != "other" and scenario_row["weight"] > 0.0:
-            consumed_coverage_sources.add((coverage_item, scenario_row["source_id"]))
+            consumed_key = (coverage_item, scenario_row["source_id"])
+            consumed_coverage_sources.add(consumed_key)
+            consumed_coverage_source_times.setdefault(consumed_key, set()).add(scenario_row["observed_at_jst"])
         for source_link in scenario_row["conditional_probability_basis"]["source_links"]:
             conditional_coverage_item = source_link["coverage_item"]
             _validate_source_link(
@@ -3914,8 +5954,10 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
                 f"シナリオ '{scenario_row['scenario_id']}' の条件付き4象限モデル",
             )
             if conditional_coverage_item != "other":
-                consumed_coverage_sources.add(
-                    (conditional_coverage_item, source_link["source_id"])
+                consumed_key = (conditional_coverage_item, source_link["source_id"])
+                consumed_coverage_sources.add(consumed_key)
+                consumed_coverage_source_times.setdefault(consumed_key, set()).add(
+                    source_link["data_as_of_jst"]
                 )
     for source_link in probability["base_provenance"]["source_links"]:
         coverage_item = source_link["coverage_item"]
@@ -3929,7 +5971,9 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
             "4象限baseモデル",
         )
         if coverage_item != "other":
-            consumed_coverage_sources.add((coverage_item, source_link["source_id"]))
+            consumed_key = (coverage_item, source_link["source_id"])
+            consumed_coverage_sources.add(consumed_key)
+            consumed_coverage_source_times.setdefault(consumed_key, set()).add(source_link["data_as_of_jst"])
     relative_value = probability["relative_value"]
     for source_group_name in ("model_provenance", "spread_vol_source_links"):
         source_links = (
@@ -3949,7 +5993,9 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
                 "NT相対価値モデル" if source_group_name == "model_provenance" else "NT相対σ",
             )
             if coverage_item != "other":
-                consumed_coverage_sources.add((coverage_item, source_link["source_id"]))
+                consumed_key = (coverage_item, source_link["source_id"])
+                consumed_coverage_sources.add(consumed_key)
+                consumed_coverage_source_times.setdefault(consumed_key, set()).add(source_link["data_as_of_jst"])
     calendar_coverage_item = daily_forecast["calendar_coverage_item"]
     _validate_source_link(
         calendar_coverage_item,
@@ -3961,7 +6007,11 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
         "D1〜D5営業日カレンダー",
     )
     if calendar_coverage_item != "other":
-        consumed_coverage_sources.add((calendar_coverage_item, daily_forecast["calendar_source_id"]))
+        consumed_key = (calendar_coverage_item, daily_forecast["calendar_source_id"])
+        consumed_coverage_sources.add(consumed_key)
+        consumed_coverage_source_times.setdefault(consumed_key, set()).add(
+            daily_forecast["calendar_data_as_of_jst"]
+        )
     for source_link in daily_forecast["drift_model_provenance"]["source_links"]:
         coverage_item = source_link["coverage_item"]
         _validate_source_link(
@@ -3974,7 +6024,9 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
             "D1〜D5方向ドリフトモデル",
         )
         if coverage_item != "other":
-            consumed_coverage_sources.add((coverage_item, source_link["source_id"]))
+            consumed_key = (coverage_item, source_link["source_id"])
+            consumed_coverage_sources.add(consumed_key)
+            consumed_coverage_source_times.setdefault(consumed_key, set()).add(source_link["data_as_of_jst"])
     for index_name in ("nikkei", "topix"):
         for day_row in daily_forecast[index_name]:
             for source_link in day_row["expected_move_source_links"]:
@@ -3989,7 +6041,11 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
                     f"{index_name} {day_row['label']} の変動幅ソース",
                 )
                 if coverage_item != "other":
-                    consumed_coverage_sources.add((coverage_item, source_link["source_id"]))
+                    consumed_key = (coverage_item, source_link["source_id"])
+                    consumed_coverage_sources.add(consumed_key)
+                    consumed_coverage_source_times.setdefault(consumed_key, set()).add(
+                        source_link["data_as_of_jst"]
+                    )
     unconsumed_used_sources = [
         (item_name, source_id)
         for item_name in COVERAGE_ITEMS
@@ -4002,6 +6058,41 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
             "coverageでusedとしたsourceに証拠・イベント・シナリオ・条件付きモデル・方向ドリフト・分散・営業日からの利用先がありません: "
             + ", ".join(f"{item_name}:{source_id}" for item_name, source_id in unconsumed_used_sources)
         )
+    for item_name in COVERAGE_ITEMS:
+        if coverage_items[item_name]["status"] != "used":
+            continue
+        observation_times = [
+            _parse_jst(observed_at, f"coverage.{item_name} の消費時刻")
+            for source_id in coverage_items[item_name]["source_ids"]
+            for observed_at in consumed_coverage_source_times[(item_name, source_id)]
+        ]
+        coverage_data_as_of = _parse_jst(
+            coverage_items[item_name]["data_as_of_jst"],
+            f"coverage.{item_name}.data_as_of_jst",
+        )
+        if coverage_data_as_of != max(observation_times):
+            raise InputValidationError(
+                f"coverage.{item_name}.data_as_of_jstを全利用先の最新観測時刻と一致させてください。"
+            )
+    for (coverage_item, source_id), observed_times in consumed_coverage_source_times.items():
+        if coverage_item not in PRICE_COVERAGE_ITEMS and coverage_item != "jquants":
+            continue
+        registry_row = market_data_freshness["source_registry"].get(source_id)
+        if registry_row is None:
+            continue
+        registry_time = _parse_jst(
+            registry_row["data_as_of_jst"],
+            f"market_data_freshness.source_registry.{source_id}.data_as_of_jst",
+        )
+        mismatched_times = [
+            observed_at
+            for observed_at in observed_times
+            if _parse_jst(observed_at, f"{coverage_item}:{source_id} の利用時刻") != registry_time
+        ]
+        if mismatched_times:
+            raise InputValidationError(
+                f"coverage.{coverage_item} のsource '{source_id}' は利用先時刻をsource_registryの観測時刻と一致させてください。"
+            )
     runtime_now_jst = _runtime_current_jst()
     analysis_age_seconds = (runtime_now_jst - as_of_jst).total_seconds()
     board_entry_valid_until = _parse_jst(
@@ -4023,6 +6114,22 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
         analysis_hold_reasons.append("OS実時計で予測の絶対有効期限を経過")
     if not coverage["summary"]["analysis_gate_passed"]:
         analysis_hold_reasons.append("市場横断データの分析ゲート未達")
+    delayed_jquants_sources = sorted(
+        row["source_id"]
+        for row in market_data_freshness["jquants_dataset_updates"]
+        if row["availability_status"] == "delayed"
+        and row["source_id"]
+        in {
+            selection["selected_source_id"]
+            for selection in market_data_freshness["source_selection_audit"]
+            if selection["purpose"] == "scheduled_history"
+        }
+    )
+    if delayed_jquants_sources:
+        analysis_hold_reasons.append(
+            "J-Quants定時履歴の公式公表遅延: "
+            + ", ".join(delayed_jquants_sources)
+        )
     if not probability["calibration"]["probability_wording_allowed"]:
         analysis_hold_reasons.append("期限一致のウォークフォワード校正ゲート未達")
     if probability["winner_tie"]:
@@ -4054,9 +6161,14 @@ def calculate_all(payload: Mapping[str, Any]) -> dict[str, Any]:
         "quadrants": probability,
         "nt": nt,
         "daily_forecast": daily_forecast,
+        "market_data_freshness": market_data_freshness,
         "coverage": coverage,
         "coverage_consumed_sources": [
-            {"coverage_item": item_name, "source_id": source_id}
+            {
+                "coverage_item": item_name,
+                "source_id": source_id,
+                "observed_at_jst": sorted(consumed_coverage_source_times[(item_name, source_id)]),
+            }
             for item_name, source_id in sorted(consumed_coverage_sources)
         ],
         "other_sources": other_sources,
