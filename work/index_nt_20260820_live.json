@@ -1,0 +1,1160 @@
+{
+  "schema_version": "4.0.0",
+  "sample_only": false,
+  "as_of_jst": "2026-08-20T10:35:57+09:00",
+  "timing": {
+    "board_snapshot_jst": "2026-08-20T10:35:17+09:00",
+    "board_ttl_minutes": 5,
+    "session_end_jst": "2026-08-20T15:45:00+09:00",
+    "provider_expires_jst": "2026-08-20T10:40:17+09:00",
+    "model_refresh_jst": "2026-08-20T10:50:57+09:00",
+    "materiality_threshold": 0.35,
+    "events": [
+      {
+        "event_id": "JP_JGB20_AUCTION_20260820",
+        "title": "20年国債入札結果（第197回債リオープン、予定7,000億円）",
+        "coverage_item": "economic_calendar",
+        "source_id": "mof-jgb20-auction",
+        "source_url_or_document_id": "https://www.mof.go.jp/jgbs/auction/calendar/yotei/auct20260813.htm",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年8月20日入札",
+        "scheduled_at_source": "2026-08-20T12:35:00+09:00",
+        "scheduled_at_jst": "2026-08-20T12:35:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.mof.go.jp/jgbs/auction/calendar/yotei/auct20260813.htm",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-20T12:35:00+09:00",
+        "window_end_jst": "2026-08-20T12:40:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 3,
+        "relevance": 0.75,
+        "source_quality": 1
+      },
+      {
+        "event_id": "US_UI_CLAIMS_20260820",
+        "title": "米新規失業保険申請件数",
+        "coverage_item": "economic_calendar",
+        "source_id": "fred-ui-calendar",
+        "source_url_or_document_id": "https://fred.stlouisfed.org/releases/calendar",
+        "source_timezone": "America/New_York",
+        "reference_period": "2026年8月15日終了週",
+        "scheduled_at_source": "2026-08-20T08:30:00-04:00",
+        "scheduled_at_jst": "2026-08-20T21:30:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://fred.stlouisfed.org/releases/calendar",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-20T21:30:00+09:00",
+        "window_end_jst": "2026-08-20T21:35:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 4,
+        "relevance": 0.85,
+        "source_quality": 1
+      },
+      {
+        "event_id": "US_PHILLY_FED_202608",
+        "title": "Philadelphia Fed製造業景況調査",
+        "coverage_item": "economic_calendar",
+        "source_id": "philly-fed-calendar",
+        "source_url_or_document_id": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey",
+        "source_timezone": "America/New_York",
+        "reference_period": "2026年8月",
+        "scheduled_at_source": "2026-08-20T08:30:00-04:00",
+        "scheduled_at_jst": "2026-08-20T21:30:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/manufacturing-business-outlook-survey",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-20T21:30:00+09:00",
+        "window_end_jst": "2026-08-20T21:35:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 4,
+        "relevance": 0.85,
+        "source_quality": 1
+      },
+      {
+        "event_id": "JP_CPI_202607_2025BASE",
+        "title": "全国消費者物価指数（2025年基準、2026年7月）",
+        "coverage_item": "economic_calendar",
+        "source_id": "stat-jp-cpi",
+        "source_url_or_document_id": "https://www.stat.go.jp/data/cpi/2025/sokyu.html",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年7月",
+        "scheduled_at_source": "2026-08-21T08:30:00+09:00",
+        "scheduled_at_jst": "2026-08-21T08:30:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.stat.go.jp/data/cpi/2025/sokyu.html",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-21T08:30:00+09:00",
+        "window_end_jst": "2026-08-21T08:35:00+09:00",
+        "safety_buffer_minutes": 15,
+        "occurrence_probability": 1,
+        "impact_score": 5,
+        "relevance": 1,
+        "source_quality": 1
+      },
+      {
+        "event_id": "BOJ_SECFIN_202607",
+        "title": "日本銀行・証券金融取引統計",
+        "coverage_item": "economic_calendar",
+        "source_id": "boj-calendar",
+        "source_url_or_document_id": "https://www.boj.or.jp/en/about/calendar/",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年7月",
+        "scheduled_at_source": "2026-08-24T08:50:00+09:00",
+        "scheduled_at_jst": "2026-08-24T08:50:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.boj.or.jp/en/about/calendar/",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-24T08:50:00+09:00",
+        "window_end_jst": "2026-08-24T08:55:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 2,
+        "relevance": 0.5,
+        "source_quality": 1
+      },
+      {
+        "event_id": "BOJ_CORE_CPI_IND",
+        "title": "日本銀行・基調的なインフレ率を捕捉するための指標",
+        "coverage_item": "economic_calendar",
+        "source_id": "boj-calendar",
+        "source_url_or_document_id": "https://www.boj.or.jp/en/about/calendar/",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年7月",
+        "scheduled_at_source": "2026-08-25T14:00:00+09:00",
+        "scheduled_at_jst": "2026-08-25T14:00:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.boj.or.jp/en/about/calendar/",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-25T14:00:00+09:00",
+        "window_end_jst": "2026-08-25T14:05:00+09:00",
+        "safety_buffer_minutes": 15,
+        "occurrence_probability": 1,
+        "impact_score": 3,
+        "relevance": 0.9,
+        "source_quality": 1
+      },
+      {
+        "event_id": "US_NEW_HOME_SALES_202607",
+        "title": "米新築住宅販売",
+        "coverage_item": "economic_calendar",
+        "source_id": "census-calendar",
+        "source_url_or_document_id": "https://www.census.gov/economic-indicators/calendar-listview.html",
+        "source_timezone": "America/New_York",
+        "reference_period": "2026年7月",
+        "scheduled_at_source": "2026-08-25T10:00:00-04:00",
+        "scheduled_at_jst": "2026-08-25T23:00:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.census.gov/economic-indicators/calendar-listview.html",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-25T23:00:00+09:00",
+        "window_end_jst": "2026-08-25T23:05:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 3,
+        "relevance": 0.7,
+        "source_quality": 1
+      },
+      {
+        "event_id": "BOJ_SPPI_202607",
+        "title": "日本銀行・企業向けサービス価格指数",
+        "coverage_item": "economic_calendar",
+        "source_id": "boj-calendar",
+        "source_url_or_document_id": "https://www.boj.or.jp/en/about/calendar/",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年7月",
+        "scheduled_at_source": "2026-08-26T08:50:00+09:00",
+        "scheduled_at_jst": "2026-08-26T08:50:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.boj.or.jp/en/about/calendar/",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-26T08:50:00+09:00",
+        "window_end_jst": "2026-08-26T08:55:00+09:00",
+        "safety_buffer_minutes": 15,
+        "occurrence_probability": 1,
+        "impact_score": 3,
+        "relevance": 0.9,
+        "source_quality": 1
+      },
+      {
+        "event_id": "JP_JGB_LE_460",
+        "title": "国債流動性供給入札（残存5年超11年以下、予定6,500億円）",
+        "coverage_item": "economic_calendar",
+        "source_id": "mof-jgb-liquidity-auction",
+        "source_url_or_document_id": "https://www.mof.go.jp/jgbs/auction/calendar/yotei/auct20260819.htm",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年8月26日入札",
+        "scheduled_at_source": "2026-08-26T12:35:00+09:00",
+        "scheduled_at_jst": "2026-08-26T12:35:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.mof.go.jp/jgbs/auction/calendar/yotei/auct20260819.htm",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-26T12:35:00+09:00",
+        "window_end_jst": "2026-08-26T12:40:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 3,
+        "relevance": 0.75,
+        "source_quality": 1
+      },
+      {
+        "event_id": "US_BEA_MACRO_20260826",
+        "title": "米GDP2次推計・企業利益・個人所得支出/PCE",
+        "coverage_item": "economic_calendar",
+        "source_id": "bea-calendar",
+        "source_url_or_document_id": "https://www.bea.gov/news/schedule/full",
+        "source_timezone": "America/New_York",
+        "reference_period": "2026年4-6月期および2026年7月",
+        "scheduled_at_source": "2026-08-26T08:30:00-04:00",
+        "scheduled_at_jst": "2026-08-26T21:30:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.bea.gov/news/schedule/full",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-26T21:30:00+09:00",
+        "window_end_jst": "2026-08-26T21:35:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 5,
+        "relevance": 1,
+        "source_quality": 1
+      },
+      {
+        "event_id": "US_DURABLE_GOODS_202607",
+        "title": "米耐久財受注",
+        "coverage_item": "economic_calendar",
+        "source_id": "census-calendar",
+        "source_url_or_document_id": "https://www.census.gov/economic-indicators/calendar-listview.html",
+        "source_timezone": "America/New_York",
+        "reference_period": "2026年7月",
+        "scheduled_at_source": "2026-08-26T08:30:00-04:00",
+        "scheduled_at_jst": "2026-08-26T21:30:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.census.gov/economic-indicators/calendar-listview.html",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-26T21:30:00+09:00",
+        "window_end_jst": "2026-08-26T21:35:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 4,
+        "relevance": 0.9,
+        "source_quality": 1
+      },
+      {
+        "event_id": "MOF_PORTFOLIO_FLOWS_20260816_22",
+        "title": "対外・対内証券売買契約等",
+        "coverage_item": "economic_calendar",
+        "source_id": "mof-flow-calendar",
+        "source_url_or_document_id": "https://www.mof.go.jp/policy/international_policy/reference/itn_transactions_in_securities/schedule.htm",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年8月16日から22日",
+        "scheduled_at_source": "2026-08-27T08:50:00+09:00",
+        "scheduled_at_jst": "2026-08-27T08:50:00+09:00",
+        "previous_value": "unavailable",
+        "official_source": "https://www.mof.go.jp/policy/international_policy/reference/itn_transactions_in_securities/schedule.htm",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "unavailable",
+        "window_start_jst": "2026-08-27T08:50:00+09:00",
+        "window_end_jst": "2026-08-27T08:55:00+09:00",
+        "safety_buffer_minutes": 5,
+        "occurrence_probability": 1,
+        "impact_score": 3,
+        "relevance": 0.75,
+        "source_quality": 1
+      },
+      {
+        "event_id": "BOJ_HIMINO_SAITAMA",
+        "title": "氷見野副総裁・埼玉県金融経済懇談会挨拶",
+        "coverage_item": "economic_calendar",
+        "source_id": "boj-calendar",
+        "source_url_or_document_id": "https://www.boj.or.jp/en/about/calendar/",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "2026年8月27日",
+        "scheduled_at_source": "2026-08-27T10:30:00+09:00",
+        "scheduled_at_jst": "2026-08-27T10:30:00+09:00",
+        "previous_value": "not_applicable",
+        "official_source": "https://www.boj.or.jp/en/about/calendar/",
+        "checked_at_jst": "2026-08-20T10:20:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "not_applicable",
+        "window_start_jst": "2026-08-27T10:30:00+09:00",
+        "window_end_jst": "2026-08-27T10:45:00+09:00",
+        "safety_buffer_minutes": 15,
+        "occurrence_probability": 1,
+        "impact_score": 5,
+        "relevance": 1,
+        "source_quality": 1
+      }
+    ]
+  },
+  "probability": {
+    "model_version": "intraday-ewma-joint-normal-v1-20260820",
+    "horizon_end_jst": "2026-08-20T10:50:57+09:00",
+    "base_provenance": {
+      "model_id": "intraday-ewma-joint-normal-v1-20260820",
+      "model_version": "intraday-ewma-joint-normal-v1-20260820",
+      "calibration_version": "未校正",
+      "method": "unvalidated_intraday_ewma_joint_normal",
+      "model_structure_id": "joint-normal-evidence-logpool-v1",
+      "model_artifact_sha256": "be1d78976b6473e357389a6ccbaae5339442fbe17efcc9223a5b4bffebf8eab6",
+      "training_data_cutoff_jst": "2026-08-19T15:30:00+09:00",
+      "horizon_definition": "forecast_valid_until_midpoint_direction",
+      "horizon_seconds": 900,
+      "validation_passed": false,
+      "source_links": [
+        {
+          "coverage_item": "other",
+          "source_id": "225225-intraday-20260820",
+          "data_as_of_jst": "2026-08-20T10:30:00+09:00"
+        }
+      ],
+      "base_method": "joint_normal",
+      "prediction_output_sha256": "5b5dc91804c5b6a8a829525651f2a46202847520a8e078d4146ca3bd031a30fc"
+    },
+    "base": {
+      "joint_normal": {
+        "nikkei_mean_pct": 0,
+        "topix_mean_pct": 0,
+        "nikkei_vol_pct": 0.28895,
+        "topix_vol_pct": 0.20435,
+        "correlation": 0.79747
+      }
+    },
+    "dominant_category": "nk_up_topix_up",
+    "relative_value": {
+      "fundamental_spread_mean_bps": 0,
+      "supply_demand_spread_mean_bps": 0,
+      "event_spread_mean_bps": 0,
+      "spread_vol_pct": 0.14588,
+      "round_trip_cost_pct": 0.04,
+      "attributions": {
+        "fundamental": [],
+        "supply_demand": [],
+        "event": []
+      },
+      "model_provenance": {
+        "model_id": "intraday-ewma-nt-spread-v1-20260820",
+        "model_version": "intraday-ewma-nt-spread-v1-20260820",
+        "calibration_version": "未校正",
+        "method": "unvalidated_intraday_ewma_spread",
+        "model_structure_id": "nt-relative-normal-v1",
+        "model_artifact_sha256": "be1d78976b6473e357389a6ccbaae5339442fbe17efcc9223a5b4bffebf8eab6",
+        "training_data_cutoff_jst": "2026-08-19T15:30:00+09:00",
+        "horizon_definition": "forecast_valid_until_nt_spread_return",
+        "horizon_seconds": 900,
+        "validation_passed": false,
+        "source_links": [
+          {
+            "coverage_item": "other",
+            "source_id": "225225-intraday-20260820",
+            "data_as_of_jst": "2026-08-20T10:30:00+09:00"
+          }
+        ]
+      },
+      "spread_vol_source_links": [
+        {
+          "coverage_item": "other",
+          "source_id": "225225-intraday-20260820",
+          "data_as_of_jst": "2026-08-20T10:30:00+09:00"
+        }
+      ]
+    },
+    "evidence": [
+      {
+        "evidence_key": "tokyo-rebound-context",
+        "block": "fundamental",
+        "coverage_item": "news",
+        "source_id": "reuters-tokyo-open",
+        "fact": "東京株は前日の急落後に反発し、輸送用機器・不動産が強い一方、半導体はまちまち",
+        "inference": "広い反発は両指数上向きだが持続性には留保",
+        "counterevidence": "前日急落の自律反発を含み、追随買いの強さは未確認",
+        "category_scores": {
+          "nk_up_topix_up": 0.5,
+          "nk_up_topix_down": 0.1,
+          "nk_down_topix_up": -0.1,
+          "nk_down_topix_down": -0.5
+        },
+        "quality": 0.9,
+        "independence": 0.35,
+        "observed_at_jst": "2026-08-20T09:15:00+09:00",
+        "half_life_hours": 8,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "yen-weakness",
+        "block": "fundamental",
+        "coverage_item": "realtime_fx",
+        "source_id": "225225-usdjpy",
+        "fact": "USD/JPYは158.383、配信基準比+0.15%",
+        "inference": "円安は輸出採算を通じ両指数、特に値がさ輸出株を支えやすい",
+        "counterevidence": "160円接近では介入・当局発言リスクがある",
+        "category_scores": {
+          "nk_up_topix_up": 0.6,
+          "nk_up_topix_down": 0.3,
+          "nk_down_topix_up": -0.3,
+          "nk_down_topix_down": -0.6
+        },
+        "quality": 0.85,
+        "independence": 0.3,
+        "observed_at_jst": "2026-08-20T10:35:00+09:00",
+        "half_life_hours": 2,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "us-broad-up-sox-down",
+        "block": "fundamental",
+        "coverage_item": "overseas_markets",
+        "source_id": "225225-overseas",
+        "fact": "米現物はDow +0.22%、NASDAQ +0.16%だがSOX -2.12%、NASDAQ100 -0.22%；Dow CFDは+0.06%",
+        "inference": "米広範指数は支えだが半導体安は日経相対に逆風",
+        "counterevidence": "時間外配信は二次参照値で執行可能価格ではない",
+        "category_scores": {
+          "nk_up_topix_up": 0.2,
+          "nk_up_topix_down": -0.4,
+          "nk_down_topix_up": 0.5,
+          "nk_down_topix_down": -0.2
+        },
+        "quality": 0.85,
+        "independence": 0.35,
+        "observed_at_jst": "2026-08-20T10:35:00+09:00",
+        "half_life_hours": 8,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "jgb-yield-down",
+        "block": "fundamental",
+        "coverage_item": "jgb",
+        "source_id": "225225-jgb10y",
+        "fact": "日本10年国債利回り参照値2.837%、前日比-5.8bp",
+        "inference": "割引率低下はグロースを支える一方、銀行には逆風",
+        "counterevidence": "本日12:35の20年債入札でカーブが再変動し得る",
+        "category_scores": {
+          "nk_up_topix_up": 0.3,
+          "nk_up_topix_down": 0.4,
+          "nk_down_topix_up": -0.4,
+          "nk_down_topix_down": -0.3
+        },
+        "quality": 0.8,
+        "independence": 0.2,
+        "observed_at_jst": "2026-08-20T10:33:00+09:00",
+        "half_life_hours": 6,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "ust-yield-down",
+        "block": "fundamental",
+        "coverage_item": "ust",
+        "source_id": "225225-ust10y",
+        "fact": "米10年国債利回り参照値4.633%、前日比-2.0bp",
+        "inference": "米長期金利低下は株式バリュエーションを支えやすい",
+        "counterevidence": "変化幅は小さく、米指標で反転し得る",
+        "category_scores": {
+          "nk_up_topix_up": 0.25,
+          "nk_up_topix_down": 0.1,
+          "nk_down_topix_up": -0.1,
+          "nk_down_topix_down": -0.25
+        },
+        "quality": 0.8,
+        "independence": 0.15,
+        "observed_at_jst": "2026-08-20T10:34:00+09:00",
+        "half_life_hours": 6,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "oil-elevated",
+        "block": "fundamental",
+        "coverage_item": "oil",
+        "source_id": "225225-wti",
+        "fact": "WTI参照値84.59ドル、前日比+0.24%",
+        "inference": "輸入コスト増は日本株全体に逆風だが資源株は相対的に下支え",
+        "counterevidence": "単日の上昇幅は小さく、限月不明の二次参照値",
+        "category_scores": {
+          "nk_up_topix_up": -0.25,
+          "nk_up_topix_down": 0.1,
+          "nk_down_topix_up": -0.1,
+          "nk_down_topix_down": 0.25
+        },
+        "quality": 0.75,
+        "independence": 0.25,
+        "observed_at_jst": "2026-08-20T10:33:00+09:00",
+        "half_life_hours": 12,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "gold-neutral",
+        "block": "fundamental",
+        "coverage_item": "gold",
+        "source_id": "225225-gold",
+        "fact": "NY金参照値4557.01ドル、前日比+0.26%",
+        "inference": "安全資産逃避を断定できる変化ではなく方向差を付けない",
+        "counterevidence": "地政学・実質金利要因を分離できない",
+        "category_scores": {
+          "nk_up_topix_up": 0,
+          "nk_up_topix_down": 0,
+          "nk_down_topix_up": 0,
+          "nk_down_topix_down": 0
+        },
+        "quality": 0.75,
+        "independence": 1,
+        "observed_at_jst": "2026-08-20T10:34:00+09:00",
+        "half_life_hours": 12,
+        "neutral_observation": true
+      },
+      {
+        "evidence_key": "crypto-risk-on",
+        "block": "fundamental",
+        "coverage_item": "crypto",
+        "source_id": "225225-crypto",
+        "fact": "BTC円価格は24時間+6.83%、ETH円価格は+16.80%",
+        "inference": "短期のリスク選好回復を補助的に示す",
+        "counterevidence": "二次配信の円換算値で、日本株への因果は弱い",
+        "category_scores": {
+          "nk_up_topix_up": 0.25,
+          "nk_up_topix_down": 0.1,
+          "nk_down_topix_up": -0.1,
+          "nk_down_topix_down": -0.25
+        },
+        "quality": 0.85,
+        "independence": 0.12,
+        "observed_at_jst": "2026-08-20T10:35:20+09:00",
+        "half_life_hours": 6,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "monthly-report-time-unconfirmed",
+        "block": "fundamental",
+        "coverage_item": "economic_calendar",
+        "source_id": "cao-monthly-report",
+        "fact": "8月月例経済報告は8月27日だが公表時刻未定",
+        "inference": "D5時刻確定まで方向差を付けない",
+        "counterevidence": "基調判断変更ならD5に材料化し得る",
+        "category_scores": {
+          "nk_up_topix_up": 0,
+          "nk_up_topix_down": 0,
+          "nk_down_topix_up": 0,
+          "nk_down_topix_down": 0
+        },
+        "quality": 1,
+        "independence": 1,
+        "observed_at_jst": "2026-08-20T10:20:00+09:00",
+        "half_life_hours": 168,
+        "neutral_observation": true
+      },
+      {
+        "evidence_key": "breadth-positive",
+        "block": "supply_demand",
+        "coverage_item": "other",
+        "source_id": "225225-breadth",
+        "fact": "東証33業種中27業種が上昇、6業種が下落",
+        "inference": "上昇の広がりは両指数の同時上昇を支える",
+        "counterevidence": "銀行・保険・鉄鋼などは下落している",
+        "category_scores": {
+          "nk_up_topix_up": 0.7,
+          "nk_up_topix_down": 0.1,
+          "nk_down_topix_up": -0.1,
+          "nk_down_topix_down": -0.7
+        },
+        "quality": 0.9,
+        "independence": 0.45,
+        "observed_at_jst": "2026-08-20T10:29:00+09:00",
+        "half_life_hours": 2,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "futures-joint-positive",
+        "block": "supply_demand",
+        "coverage_item": "other",
+        "source_id": "kabus-futures-board",
+        "fact": "日経225 miniは前日清算比+490円、mini-TOPIXは+41.00ptで両脚とも上昇",
+        "inference": "同限月板で両指数の上向きを確認",
+        "counterevidence": "場中高値からは押しており、板数量は薄く変化しやすい",
+        "category_scores": {
+          "nk_up_topix_up": 0.6,
+          "nk_up_topix_down": 0,
+          "nk_down_topix_up": 0,
+          "nk_down_topix_down": -0.6
+        },
+        "quality": 0.85,
+        "independence": 0.35,
+        "observed_at_jst": "2026-08-20T10:35:17+09:00",
+        "half_life_hours": 1,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "nikkei-concentration",
+        "block": "supply_demand",
+        "coverage_item": "other",
+        "source_id": "225225-contributors",
+        "fact": "日経寄与はソフトバンクグループ+165.73円、ファーストリテイリング+118.27円に集中し、東京エレクトロン-107.61円",
+        "inference": "値がさ寄与で日経相対優位だが半導体は弱い",
+        "counterevidence": "寄与度集中は反転時の脆弱性も高める",
+        "category_scores": {
+          "nk_up_topix_up": 0,
+          "nk_up_topix_down": 0.3,
+          "nk_down_topix_up": -0.3,
+          "nk_down_topix_down": 0
+        },
+        "quality": 0.85,
+        "independence": 0.3,
+        "observed_at_jst": "2026-08-20T10:30:00+09:00",
+        "half_life_hours": 2,
+        "neutral_observation": false
+      },
+      {
+        "evidence_key": "short-ratio-neutral",
+        "block": "supply_demand",
+        "coverage_item": "jquants",
+        "source_id": "jquants-short-ratio",
+        "fact": "8月19日の空売り比率は38.52%で直近数日内に上下",
+        "inference": "極端な片寄りを断定せず方向差を付けない",
+        "counterevidence": "業種集計・前日値で当日フローではない",
+        "category_scores": {
+          "nk_up_topix_up": 0,
+          "nk_up_topix_down": 0,
+          "nk_down_topix_up": 0,
+          "nk_down_topix_down": 0
+        },
+        "quality": 0.75,
+        "independence": 1,
+        "observed_at_jst": "2026-08-19T15:30:00+09:00",
+        "half_life_hours": 72,
+        "neutral_observation": true
+      }
+    ]
+  },
+  "calibration": {
+    "status": "uncalibrated",
+    "effective_sample_count": 0
+  },
+  "nt": {
+    "nikkei_symbol": "161090019",
+    "nikkei_board_product": "mini",
+    "topix_symbol": "161090006",
+    "nikkei_contract_month": "2026-09",
+    "topix_contract_month": "2026-09",
+    "nikkei_last_trading_day": "2026-09-10",
+    "topix_last_trading_day": "2026-09-10",
+    "last_trading_session_end_jst": "2026-09-10T15:45:00+09:00",
+    "nikkei_snapshot_jst": "2026-08-20T10:35:17+09:00",
+    "topix_snapshot_jst": "2026-08-20T10:35:18+09:00",
+    "max_snapshot_skew_seconds": 15,
+    "nikkei_bid": "65965",
+    "nikkei_ask": "65970",
+    "nikkei_bid_quantity": 7,
+    "nikkei_ask_quantity": 7,
+    "topix_bid": "4054.25",
+    "topix_ask": "4054.75",
+    "topix_bid_quantity": 2,
+    "topix_ask_quantity": 3
+  },
+  "daily_forecast": {
+    "calendar_verified": true,
+    "drift_model_provenance": {
+      "model_id": "zero-drift-unvalidated-v1-20260820",
+      "model_version": "zero-drift-unvalidated-v1-20260820",
+      "calibration_version": "未校正",
+      "method": "zero_drift_without_validated_coefficients",
+      "model_structure_id": "daily-incremental-lognormal-v1",
+      "model_artifact_sha256": "be1d78976b6473e357389a6ccbaae5339442fbe17efcc9223a5b4bffebf8eab6",
+      "training_data_cutoff_jst": "2026-08-19T15:30:00+09:00",
+      "horizon_definition": "next_trading_day_incremental_log_return",
+      "validation_passed": false,
+      "source_links": [
+        {
+          "coverage_item": "other",
+          "source_id": "zero-drift-policy",
+          "data_as_of_jst": "2026-08-20T10:35:57+09:00"
+        }
+      ]
+    },
+    "calendar_source": "J-Quants markets_calendar",
+    "calendar_coverage_item": "jquants",
+    "calendar_source_id": "jquants-calendar",
+    "calendar_data_as_of_jst": "2026-08-20T10:11:53+09:00",
+    "calendar_fetched_at_jst": "2026-08-20T10:11:53+09:00",
+    "calendar_sessions": [
+      {
+        "date": "2026-08-21",
+        "is_trading_day": true
+      },
+      {
+        "date": "2026-08-22",
+        "is_trading_day": false
+      },
+      {
+        "date": "2026-08-23",
+        "is_trading_day": false
+      },
+      {
+        "date": "2026-08-24",
+        "is_trading_day": true
+      },
+      {
+        "date": "2026-08-25",
+        "is_trading_day": true
+      },
+      {
+        "date": "2026-08-26",
+        "is_trading_day": true
+      },
+      {
+        "date": "2026-08-27",
+        "is_trading_day": true
+      }
+    ],
+    "verified_trading_dates": [
+      "2026-08-21",
+      "2026-08-24",
+      "2026-08-25",
+      "2026-08-26",
+      "2026-08-27"
+    ],
+    "nikkei_anchor": "65967.5",
+    "topix_anchor": "4054.5",
+    "nikkei_tick": "5",
+    "topix_tick": "0.25",
+    "days": [
+      {
+        "label": "D1",
+        "target_at_jst": "2026-08-21T15:30:00+09:00",
+        "major_events": [
+          "JP_JGB20_AUCTION_20260820",
+          "US_UI_CLAIMS_20260820",
+          "US_PHILLY_FED_202608",
+          "JP_CPI_202607_2025BASE"
+        ],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 2.1073,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "225225.jp日経225日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "other",
+              "source_id": "225225-daily-nikkei",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 1.341,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "J-Quants TOPIX日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "jquants",
+              "source_id": "jquants-topix-history",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        }
+      },
+      {
+        "label": "D2",
+        "target_at_jst": "2026-08-24T15:30:00+09:00",
+        "major_events": [],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 2.1073,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "225225.jp日経225日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "other",
+              "source_id": "225225-daily-nikkei",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 1.341,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "J-Quants TOPIX日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "jquants",
+              "source_id": "jquants-topix-history",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        }
+      },
+      {
+        "label": "D3",
+        "target_at_jst": "2026-08-25T15:30:00+09:00",
+        "major_events": [
+          "BOJ_CORE_CPI_IND"
+        ],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 2.1073,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "225225.jp日経225日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "other",
+              "source_id": "225225-daily-nikkei",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 1.341,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "J-Quants TOPIX日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "jquants",
+              "source_id": "jquants-topix-history",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        }
+      },
+      {
+        "label": "D4",
+        "target_at_jst": "2026-08-26T15:30:00+09:00",
+        "major_events": [
+          "US_NEW_HOME_SALES_202607",
+          "BOJ_SPPI_202607",
+          "JP_JGB_LE_460"
+        ],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 2.1073,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "225225.jp日経225日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "other",
+              "source_id": "225225-daily-nikkei",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 1.341,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "J-Quants TOPIX日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "jquants",
+              "source_id": "jquants-topix-history",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        }
+      },
+      {
+        "label": "D5",
+        "target_at_jst": "2026-08-27T15:30:00+09:00",
+        "major_events": [
+          "US_BEA_MACRO_20260826",
+          "US_DURABLE_GOODS_202607",
+          "MOF_PORTFOLIO_FLOWS_20260816_22",
+          "BOJ_HIMINO_SAITAMA"
+        ],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 2.1073,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "225225.jp日経225日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "other",
+              "source_id": "225225-daily-nikkei",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {
+            "fundamental": [],
+            "supply_demand": [],
+            "event": []
+          },
+          "incremental_base_sigma_pct": 1.341,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "J-Quants TOPIX日足73収益率のEWMA（λ=0.94、未校正）",
+          "expected_move_source_links": [
+            {
+              "coverage_item": "jquants",
+              "source_id": "jquants-topix-history",
+              "data_as_of_jst": "2026-08-19T15:30:00+09:00"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "other_sources": {
+    "225225-intraday-20260820": {
+      "source_url_or_document_id": "https://225225.jp/_data/_nfsDATA/hs_data/hs_CHART3.json",
+      "reason": "日経225・TOPIXの同期1分足から15分EWMA共分散を算出",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:30:00+09:00",
+      "max_data_age_hours": 1
+    },
+    "225225-daily-nikkei": {
+      "source_url_or_document_id": "https://225225.jp/_data/_nfsDATA/HS_DATA_DAY/S111.json",
+      "reason": "日経225の日次EWMA変動率",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-19T15:30:00+09:00",
+      "max_data_age_hours": 168
+    },
+    "225225-breadth": {
+      "source_url_or_document_id": "https://225225.jp/_data/_nfsDATA/min/country_jp_gyo.js",
+      "reason": "東証33業種の上昇・下落の広がり",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:29:00+09:00",
+      "max_data_age_hours": 1
+    },
+    "kabus-futures-board": {
+      "source_url_or_document_id": "http://10.10.100.1:8080/api/trade/market-data/future",
+      "reason": "同一202609限の日経225 mini・mini-TOPIX板",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:35:17+09:00",
+      "max_data_age_hours": 0.1
+    },
+    "225225-contributors": {
+      "source_url_or_document_id": "https://225225.jp/_data/_nfsDATA/min/country_jp_kiyo10N.js",
+      "reason": "日経225寄与度上位・下位",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:30:00+09:00",
+      "max_data_age_hours": 1
+    },
+    "zero-drift-policy": {
+      "source_url_or_document_id": "S:\\GitHub\\masayoshi4649\\MarketSkills\\.agents\\skills\\pnd-forecast-japan-index-nt\\references\\ファンダメンタルズと需給.md#5",
+      "reason": "検証済み方向係数がないため日次中心ドリフトを0に固定",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:35:57+09:00",
+      "max_data_age_hours": 24
+    }
+  },
+  "coverage": {
+    "news": {
+      "status": "used",
+      "reason": "当日東京市場の反発要因と半導体の弱さを確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T09:15:00+09:00",
+      "source_ids": [
+        "reuters-tokyo-open"
+      ]
+    },
+    "realtime_fx": {
+      "status": "used",
+      "reason": "USD/JPYの現在参照値を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:35:00+09:00",
+      "source_ids": [
+        "225225-usdjpy"
+      ]
+    },
+    "economic_calendar": {
+      "status": "used",
+      "reason": "D5までの公式予定と時刻未定材料を確認",
+      "checked_at_jst": "2026-08-20T10:20:00+09:00",
+      "data_as_of_jst": "2026-08-20T10:20:00+09:00",
+      "source_ids": [
+        "mof-jgb20-auction",
+        "fred-ui-calendar",
+        "philly-fed-calendar",
+        "stat-jp-cpi",
+        "boj-calendar",
+        "census-calendar",
+        "mof-jgb-liquidity-auction",
+        "bea-calendar",
+        "mof-flow-calendar",
+        "cao-monthly-report"
+      ]
+    },
+    "polymarket": {
+      "status": "excluded",
+      "reason": "BOJ9月会合市場は予測期限およびD5より先で期限不一致",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:13:00+09:00",
+      "source_ids": [
+        "polymarket-boj-september"
+      ]
+    },
+    "overseas_markets": {
+      "status": "used",
+      "reason": "米現物終値と時間外指数参照値を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:35:00+09:00",
+      "source_ids": [
+        "225225-overseas"
+      ]
+    },
+    "jgb": {
+      "status": "used",
+      "reason": "日本10年国債利回り参照値を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:33:00+09:00",
+      "source_ids": [
+        "225225-jgb10y"
+      ]
+    },
+    "ust": {
+      "status": "used",
+      "reason": "米10年国債利回り参照値を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:34:00+09:00",
+      "source_ids": [
+        "225225-ust10y"
+      ]
+    },
+    "oil": {
+      "status": "used",
+      "reason": "WTI原油参照値を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:33:00+09:00",
+      "source_ids": [
+        "225225-wti"
+      ]
+    },
+    "gold": {
+      "status": "used",
+      "reason": "NY金参照値を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:34:00+09:00",
+      "source_ids": [
+        "225225-gold"
+      ]
+    },
+    "crypto": {
+      "status": "used",
+      "reason": "BTC・ETHの円価格と24時間騰落率を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:35:20+09:00",
+      "source_ids": [
+        "225225-crypto"
+      ]
+    },
+    "jquants": {
+      "status": "used",
+      "reason": "営業日・TOPIX日足・空売り比率を確認",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:11:53+09:00",
+      "source_ids": [
+        "jquants-calendar",
+        "jquants-topix-history",
+        "jquants-short-ratio"
+      ]
+    },
+    "options": {
+      "status": "excluded",
+      "reason": "202609限34銘柄に両側板はあるが登録基準時刻・窓・建玉がなくOP有効性ゲート未充足",
+      "checked_at_jst": "2026-08-20T10:35:57+09:00",
+      "data_as_of_jst": "2026-08-20T10:13:00+09:00",
+      "source_ids": [
+        "kabus-options-202609"
+      ]
+    }
+  }
+}
+

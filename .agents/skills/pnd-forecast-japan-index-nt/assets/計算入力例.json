@@ -1,0 +1,488 @@
+{
+  "schema_version": "5.0.0",
+  "sample_only": true,
+  "_sample_notice": "架空の合成値です。実市場の予測・売買に使用しないでください。",
+  "as_of_jst": "2026-08-20T10:00:00+09:00",
+  "timing": {
+    "board_snapshot_jst": "2026-08-20T09:59:00+09:00",
+    "board_ttl_minutes": 30,
+    "session_end_jst": "2026-08-20T15:45:00+09:00",
+    "provider_expires_jst": "2026-08-20T10:29:00+09:00",
+    "model_refresh_jst": "2026-08-20T15:40:00+09:00",
+    "materiality_threshold": 0.35,
+    "events": [
+      {
+        "event_id": "sample-event",
+        "title": "合成重要イベント",
+        "coverage_item": "other",
+        "source_id": "synthetic-calendar",
+        "source_url_or_document_id": "synthetic://calendar/sample-event",
+        "source_timezone": "Asia/Tokyo",
+        "reference_period": "合成テスト期間",
+        "scheduled_at_source": "2026-08-20T12:30:00+09:00",
+        "scheduled_at_jst": "2026-08-20T12:30:00+09:00",
+        "previous_value": "not_applicable",
+        "official_source": "synthetic://calendar/sample-event",
+        "checked_at_jst": "2026-08-20T09:50:00+09:00",
+        "release_status": "scheduled",
+        "consensus_status": "not_applicable",
+        "window_start_jst": "2026-08-20T12:30:00+09:00",
+        "window_end_jst": "2026-08-20T12:45:00+09:00",
+        "safety_buffer_minutes": 15,
+        "occurrence_probability": 1.0,
+        "impact_score": 4,
+        "relevance": 1.0,
+        "source_quality": 1.0
+      }
+    ]
+  },
+  "probability": {
+    "model_version": "synthetic-model-v1",
+    "horizon_end_jst": "2026-08-20T12:15:00+09:00",
+    "base_provenance": {
+      "base_method": "joint_normal",
+      "model_id": "synthetic-joint-normal-v1",
+      "model_version": "synthetic-model-v1",
+      "calibration_version": "synthetic-calibration-v1",
+      "method": "weighted_bivariate_state_model",
+      "model_structure_id": "synthetic-joint-normal-evidence-v1",
+      "model_artifact_sha256": "991a1ba90aa5286cf95387c6cdc437db105bc169191d5ebc650bbf7105ce6fa5",
+      "training_data_cutoff_jst": "2026-08-19T23:59:00+09:00",
+      "horizon_definition": "forecast_valid_until_midpoint_direction",
+      "horizon_seconds": 8100,
+      "prediction_output_sha256": "e1012aeeda9dd78025b1e070fac230b0a27f37474039dd8b90a14845780c10e0",
+      "validation_passed": false,
+      "source_links": [
+        {
+          "coverage_item": "other",
+          "source_id": "synthetic-base-model",
+          "data_as_of_jst": "2026-08-20T09:58:00+09:00"
+        }
+      ]
+    },
+    "base": {
+      "joint_normal": {
+        "nikkei_mean_pct": 0,
+        "topix_mean_pct": 0,
+        "nikkei_vol_pct": 1.0,
+        "topix_vol_pct": 0.8,
+        "correlation": 0
+      }
+    },
+    "dominant_category": "nk_up_topix_up",
+    "relative_value": {
+      "fundamental_spread_mean_bps": 0,
+      "supply_demand_spread_mean_bps": 0,
+      "event_spread_mean_bps": 0,
+      "spread_vol_pct": 0.5,
+      "round_trip_cost_pct": 0.05,
+      "attributions": {
+        "fundamental": [],
+        "supply_demand": [],
+        "event": []
+      },
+      "model_provenance": {
+        "model_id": "synthetic-relative-value-v1",
+        "model_version": "synthetic-relative-value-v1",
+        "calibration_version": "synthetic-relative-calibration-v1",
+        "method": "weighted_spread_state_model",
+        "model_structure_id": "synthetic-relative-structure-v1",
+        "model_artifact_sha256": "9d63fccabe08617d6ff4575781079781abb43223cd900f20e79aaf54291291ab",
+        "training_data_cutoff_jst": "2026-08-19T23:59:00+09:00",
+        "horizon_definition": "forecast_valid_until_nt_spread_return",
+        "horizon_seconds": 8100,
+        "validation_passed": false,
+        "source_links": [
+          {
+            "coverage_item": "other",
+            "source_id": "synthetic-relative-model",
+            "data_as_of_jst": "2026-08-20T09:58:00+09:00"
+          }
+        ]
+      },
+      "spread_vol_source_links": [
+        {
+          "coverage_item": "other",
+          "source_id": "synthetic-daily-volatility",
+          "data_as_of_jst": "2026-08-20T09:55:00+09:00"
+        }
+      ]
+    },
+    "evidence": [
+      {
+        "evidence_key": "fundamental-neutral",
+        "block": "fundamental",
+        "coverage_item": "other",
+        "source_id": "synthetic-fundamental",
+        "fact": "テスト用の中立ファンダメンタルズ観測",
+        "inference": "4象限へ方向差を付けない",
+        "counterevidence": "合成入力のため実市場反証なし",
+        "category_scores": {
+          "nk_up_topix_up": 0,
+          "nk_up_topix_down": 0,
+          "nk_down_topix_up": 0,
+          "nk_down_topix_down": 0
+        },
+        "quality": 1,
+        "independence": 1,
+        "observed_at_jst": "2026-08-20T09:55:00+09:00",
+        "half_life_hours": 24,
+        "neutral_observation": true
+      },
+      {
+        "evidence_key": "supply-neutral",
+        "block": "supply_demand",
+        "coverage_item": "other",
+        "source_id": "synthetic-supply",
+        "fact": "テスト用の中立需給観測",
+        "inference": "4象限へ方向差を付けない",
+        "counterevidence": "合成入力のため実市場反証なし",
+        "category_scores": {
+          "nk_up_topix_up": 0,
+          "nk_up_topix_down": 0,
+          "nk_down_topix_up": 0,
+          "nk_down_topix_down": 0
+        },
+        "quality": 1,
+        "independence": 1,
+        "observed_at_jst": "2026-08-20T09:59:00+09:00",
+        "half_life_hours": 2,
+        "neutral_observation": true
+      }
+    ]
+  },
+  "calibration": {
+    "status": "uncalibrated",
+    "effective_sample_count": 0
+  },
+  "nt": {
+    "nikkei_symbol": "SYNTHETIC-NK225M-202609",
+    "nikkei_board_product": "micro",
+    "topix_symbol": "SYNTHETIC-TOPIXM-202609",
+    "nikkei_contract_month": "2026-09",
+    "topix_contract_month": "2026-09",
+    "nikkei_last_trading_day": "2026-09-10",
+    "topix_last_trading_day": "2026-09-10",
+    "last_trading_session_end_jst": "2026-09-10T15:45:00+09:00",
+    "nikkei_snapshot_jst": "2026-08-20T09:59:00+09:00",
+    "topix_snapshot_jst": "2026-08-20T09:59:05+09:00",
+    "max_snapshot_skew_seconds": 15,
+    "nikkei_bid": "39995",
+    "nikkei_ask": "40005",
+    "nikkei_bid_quantity": 100,
+    "nikkei_ask_quantity": 100,
+    "topix_bid": "2499.75",
+    "topix_ask": "2500.25",
+    "topix_bid_quantity": 100,
+    "topix_ask_quantity": 100,
+    "strategy": "nt_long",
+    "selected_position": {
+      "nikkei_product": "micro",
+      "nikkei_quantity": 6,
+      "topix_mini_quantity": 1
+    }
+  },
+  "daily_forecast": {
+    "calendar_verified": true,
+    "drift_model_provenance": {
+      "model_id": "synthetic-daily-drift-v1",
+      "model_version": "synthetic-daily-drift-v1",
+      "calibration_version": "synthetic-daily-drift-calibration-v1",
+      "method": "walk_forward_incremental_drift",
+      "model_structure_id": "synthetic-daily-drift-structure-v1",
+      "model_artifact_sha256": "86634eb0c2135218569d86ed44b3def248da2dd03edac74bc1a539ce89258975",
+      "training_data_cutoff_jst": "2026-08-19T23:59:00+09:00",
+      "horizon_definition": "next_trading_day_incremental_log_return",
+      "validation_passed": false,
+      "source_links": [
+        {
+          "coverage_item": "other",
+          "source_id": "synthetic-drift-model",
+          "data_as_of_jst": "2026-08-20T09:58:00+09:00"
+        }
+      ]
+    },
+    "calendar_source": "J-Quants合成カレンダー",
+    "calendar_coverage_item": "other",
+    "calendar_source_id": "synthetic-trading-calendar",
+    "calendar_data_as_of_jst": "2026-08-20T09:50:00+09:00",
+    "calendar_fetched_at_jst": "2026-08-20T09:50:00+09:00",
+    "calendar_sessions": [
+      {"date": "2026-08-21", "is_trading_day": true},
+      {"date": "2026-08-22", "is_trading_day": false},
+      {"date": "2026-08-23", "is_trading_day": false},
+      {"date": "2026-08-24", "is_trading_day": true},
+      {"date": "2026-08-25", "is_trading_day": true},
+      {"date": "2026-08-26", "is_trading_day": true},
+      {"date": "2026-08-27", "is_trading_day": true}
+    ],
+    "verified_trading_dates": [
+      "2026-08-21",
+      "2026-08-24",
+      "2026-08-25",
+      "2026-08-26",
+      "2026-08-27"
+    ],
+    "nikkei_anchor": "40000",
+    "topix_anchor": "2500",
+    "nikkei_tick": "5",
+    "topix_tick": "0.25",
+    "days": [
+      {
+        "label": "D1",
+        "target_at_jst": "2026-08-21T15:30:00+09:00",
+        "major_events": ["sample-event"],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 1.0,
+          "incremental_event_sigma_pct": 0.1,
+          "event_variance_event_ids": ["sample-event"],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 0.8,
+          "incremental_event_sigma_pct": 0.1,
+          "event_variance_event_ids": ["sample-event"],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        }
+      },
+      {
+        "label": "D2",
+        "target_at_jst": "2026-08-24T15:30:00+09:00",
+        "major_events": [],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 1.0,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 0.8,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        }
+      },
+      {
+        "label": "D3",
+        "target_at_jst": "2026-08-25T15:30:00+09:00",
+        "major_events": [],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 1.0,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 0.8,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        }
+      },
+      {
+        "label": "D4",
+        "target_at_jst": "2026-08-26T15:30:00+09:00",
+        "major_events": [],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 1.0,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 0.8,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        }
+      },
+      {
+        "label": "D5",
+        "target_at_jst": "2026-08-27T15:30:00+09:00",
+        "major_events": [],
+        "nikkei": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 1.0,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        },
+        "topix": {
+          "fundamental_drift_bps": 0,
+          "supply_demand_drift_bps": 0,
+          "event_drift_bps": 0,
+          "drift_attributions": {"fundamental": [], "supply_demand": [], "event": []},
+          "incremental_base_sigma_pct": 0.8,
+          "incremental_event_sigma_pct": 0,
+          "event_variance_event_ids": [],
+          "expected_move_source": "合成固定増分分散",
+          "expected_move_source_links": [{"coverage_item": "other", "source_id": "synthetic-daily-volatility", "data_as_of_jst": "2026-08-20T09:55:00+09:00"}]
+        }
+      }
+    ]
+  },
+  "other_sources": {
+    "synthetic-base-model": {
+      "source_url_or_document_id": "synthetic://model/base-probability",
+      "reason": "配布入力例の合成4象限baseモデル",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:58:00+09:00",
+      "max_data_age_hours": 24
+    },
+    "synthetic-calendar": {
+      "source_url_or_document_id": "synthetic://calendar/sample-event",
+      "reason": "配布入力例の合成イベント予定",
+      "checked_at_jst": "2026-08-20T09:50:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:50:00+09:00",
+      "max_data_age_hours": 24
+    },
+    "synthetic-drift-model": {
+      "source_url_or_document_id": "synthetic://model/daily-drift",
+      "reason": "配布入力例の合成方向ドリフトモデル",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:58:00+09:00",
+      "max_data_age_hours": 24
+    },
+    "synthetic-daily-volatility": {
+      "source_url_or_document_id": "synthetic://model/daily-volatility",
+      "reason": "配布入力例の合成増分分散",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:55:00+09:00",
+      "max_data_age_hours": 24
+    },
+    "synthetic-fundamental": {
+      "source_url_or_document_id": "synthetic://evidence/fundamental",
+      "reason": "配布入力例の合成ファンダメンタルズ証拠",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:55:00+09:00",
+      "max_data_age_hours": 24
+    },
+    "synthetic-relative-model": {
+      "source_url_or_document_id": "synthetic://model/relative-value",
+      "reason": "配布入力例の合成NT相対価値モデル",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:58:00+09:00",
+      "max_data_age_hours": 24
+    },
+    "synthetic-supply": {
+      "source_url_or_document_id": "synthetic://evidence/supply",
+      "reason": "配布入力例の合成需給証拠",
+      "checked_at_jst": "2026-08-20T09:59:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:59:00+09:00",
+      "max_data_age_hours": 24
+    },
+    "synthetic-trading-calendar": {
+      "source_url_or_document_id": "synthetic://calendar/trading-days",
+      "reason": "配布入力例の合成営業日列",
+      "checked_at_jst": "2026-08-20T09:50:00+09:00",
+      "data_as_of_jst": "2026-08-20T09:50:00+09:00",
+      "max_data_age_hours": 24
+    }
+  },
+  "coverage": {
+    "news": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "realtime_fx": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "economic_calendar": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "polymarket": {
+      "status": "not_applicable",
+      "reason": "合成入力に関連市場を設定していない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "overseas_markets": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "jgb": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "ust": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "oil": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "gold": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "crypto": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "jquants": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    },
+    "options": {
+      "status": "unavailable",
+      "reason": "合成入力では外部取得を行わない",
+      "checked_at_jst": "2026-08-20T09:58:00+09:00"
+    }
+  }
+}
